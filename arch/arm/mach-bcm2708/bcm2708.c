@@ -765,10 +765,52 @@ static void bcm2708_power_off(void)
 }
 
 /* -------------------- I2C ------------------------------ */
+#include <linux/i2c/ads1015.h>
+static struct ads1015_platform_data	polievanie_ads1015_data = {
+	.channel_data = {
+		/* AIN0 */
+		{
+			.enabled	= true,
+			.pga		= 0, /* Full scale +-6,144 V */
+			.data_rate	= 0, /* 128 samples per second */
+		},
+		/* AIN1 */
+		{
+			.enabled	= true,
+			.pga		= 0,
+			.data_rate	= 0,
+		},
+		/* AIN2 */
+		{
+			.enabled	= true,
+			.pga		= 0,
+			.data_rate	= 0,
+		},
+		/* AIN3 */
+		{
+			.enabled	= true,
+			.pga		= 0,
+			.data_rate	= 0,
+		},
+		{.enabled = false,},
+		{.enabled = false,},
+		{.enabled = false,},
+		{.enabled = false,},
+	},
+};
+
 static struct i2c_board_info __initdata polievanie_i2c_devices[] = {
+	/* RTC hardware clock */
 	{
 		I2C_BOARD_INFO("rtc-ds1307", 0x68),
 			.type = "ds1307",
+
+	},
+	/* A/D converter for rain sensor */
+	{
+		I2C_BOARD_INFO("ads1015", 0x48),
+			.type = "ads1015",
+			.platform_data = &polievanie_ads1015_data,
 
 	},
 };
