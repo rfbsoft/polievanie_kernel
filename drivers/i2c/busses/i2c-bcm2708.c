@@ -152,6 +152,7 @@ static inline void bcm2708_bsc_setup(struct bcm2708_i2c *bi)
 	unsigned long bus_hz;
 	u32 cdiv;
 	u32 c = BSC_C_I2CEN | BSC_C_INTD | BSC_C_ST | BSC_C_CLEAR_1;
+	u32 cdel;
 
 	bus_hz = clk_get_rate(bi->clk);
 	cdiv = bus_hz / baudrate;
@@ -165,6 +166,10 @@ static inline void bcm2708_bsc_setup(struct bcm2708_i2c *bi)
 	bcm2708_wr(bi, BSC_A, bi->msg->addr);
 	bcm2708_wr(bi, BSC_DLEN, bi->msg->len);
 	bcm2708_wr(bi, BSC_C, c);
+
+	cdel = (cdiv / 4) & 0xffff;
+	cdel = cdel << 16 | cdel;
+	bcm2708_wr(bi, BSC_DEL, cdel);
 }
 
 static irqreturn_t bcm2708_i2c_interrupt(int irq, void *dev_id)
