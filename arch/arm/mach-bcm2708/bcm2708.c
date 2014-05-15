@@ -764,6 +764,16 @@ static void bcm2708_power_off(void)
 	}
 }
 
+/* -------------------- I2C ------------------------------ */
+static struct i2c_board_info __initdata polievanie_i2c_devices[] = {
+	{
+		I2C_BOARD_INFO("rtc-ds1307", 0x68),
+			.type = "ds1307",
+
+	},
+};
+
+
 void __init bcm2708_init(void)
 {
 	int i;
@@ -833,6 +843,7 @@ void __init bcm2708_init(void)
         i2c_register_board_info(1, snd_pcm512x_i2c_devices, ARRAY_SIZE(snd_pcm512x_i2c_devices));
 #endif
 
+	i2c_register_board_info(1, polievanie_i2c_devices, ARRAY_SIZE(polievanie_i2c_devices));
 
 	for (i = 0; i < ARRAY_SIZE(amba_devs); i++) {
 		struct amba_device *d = amba_devs[i];
