@@ -1035,6 +1035,16 @@ config SENSORS_SHT15
 	  This driver can also be built as a module.  If so, the module
 	  will be called sht15.
 
+config SENSORS_DHT22
+	tristate "Aosong(Guangzhou) Electronics humidity and temperature sensors."
+	depends on GPIOLIB
+	help
+	  If you say yes here you get support for the Aosong(Guangzhou) Electronics
+	  DHT11, DHT21, DHT22 and DHT33 humidity and temperature sensors.
+
+	  This driver can also be built as a module.  If so, the module
+	  will be called dht22.
+
 config SENSORS_SHT21
 	tristate "Sensiron humidity and temperature sensors. SHT21 and compat."
 	depends on I2C

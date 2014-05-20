@@ -815,7 +815,20 @@ static struct i2c_board_info __initdata polievanie_i2c_devices[] = {
 	},
 };
 
+/* -------------------- DHT22 humidity & temperature sensor ------------------------------ */
+#include <linux/platform_data/dht22.h>
 
+struct dht22_platform_data polievanie_dht22_device_data = {
+	.gpio_data	= 4,	/* INPUT signal connected to GPIO 4 */
+	.checksum	= true,	/* checksumming is active */
+};
+
+static struct platform_device polievanie_dht22_device = {
+	.name = "dht22",
+	.dev.platform_data = &polievanie_dht22_device_data,
+};
+
+/* -------------------- board init ------------------------------ */
 void __init bcm2708_init(void)
 {
 	int i;
@@ -885,7 +898,11 @@ void __init bcm2708_init(void)
         i2c_register_board_info(1, snd_pcm512x_i2c_devices, ARRAY_SIZE(snd_pcm512x_i2c_devices));
 #endif
 
+	/* polievanie i2c devices */
 	i2c_register_board_info(1, polievanie_i2c_devices, ARRAY_SIZE(polievanie_i2c_devices));
+
+	/* polievanie DHT22 humidity & temperature sensor */
+	bcm_register_device(&polievanie_dht22_device);
 
 	for (i = 0; i < ARRAY_SIZE(amba_devs); i++) {
 		struct amba_device *d = amba_devs[i];
