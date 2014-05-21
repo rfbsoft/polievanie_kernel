@@ -1,13 +1,7 @@
 /*
  * dht22.c - support for the DHT22 Temperature and Humidity Sensor
  *
- * Portions Copyright (c) 2010-2012 Savoir-faire Linux Inc.
- *          Jerome Oufella <jerome.oufella@savoirfairelinux.com>
- *          Vivien Didelot <vivien.didelot@savoirfairelinux.com>
- *
- * Copyright (c) 2009 Jonathan Cameron
- *
- * Copyright (c) 2007 Wouter Horre
+ * inspired by sht15.c driver
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -40,14 +34,7 @@
 
 /* Aosong AM2303 (DHT22) sensor timings */
 #define DHT22_START_LOW			18	/* (msecs) start signal low time */
-#define DHT22_START_WAIT_HIGH		40	/* (usecs) wait for DHT22 response (in high state) time */
-#define DHT22_RESPONSE_LOW		80	/* (usecs) sensor send response low signal  time */
-#define DHT22_RESPONSE_HIGH		80	/* (usecs) sensor send response high signal  time */
-#define DHT22_BITSTART_LOW		50	/* (usecs) start transmit one bit time */
-#define DHT22_BIT0_HIGH_MIN		26	/* (usecs) min time bit "0" */
-#define DHT22_BIT0_HIGH_MAX		28	/* (usecs) max time bit "0" */
-#define DHT22_BIT1_HIGH			70	/* (usecs)     time bit "1" */
-#define DHT22_READING_TIMEOUT		10	/* (msecs) max time for reading data from sensor: (DHT22_BITSTART_LOW + DHT22_BIT1_HIGH) * DHT22_BITCOUNT + DHT22_RESPONSE_HIGH + DHT22_RESPONSE_LOW + ... */
+#define DHT22_READING_TIMEOUT		10	/* (msecs) max time for reading data from sensor */
 #define DHT22_READING_CYCLE		2000	/* (msecs) min time between 2 readings */
 
 /* List of supported chips */
@@ -157,14 +144,14 @@ static int dht22_measurement(struct dht22_data *data)
 	disable_irq_nosync(gpio_to_irq(data->pdata->gpio_data));
 
 	/* debug messages */
-	printk("--- dht22_value: 0x%016llx interrupts handled: %d\n", data->bitstream_read, atomic_read(&data->interrupt_handled));
+	dev_dbg(data->dev, "bitstream_read: 0x%016llx interrupts handled: %d\n", data->bitstream_read, atomic_read(&data->interrupt_handled));
 
 	if (ret == 0) { /* timeout occurred */
-		printk("--- dht22_value: read timeout\n");
+		dev_err(data->dev, "read timeout\n");
 		return -ETIME;
 	}
 	else if(data->state == DHT22_FAILURE) {
-		printk("--- dht22_value: I/O error occured\n");
+		dev_err(data->dev, "I/O error occured\n");
 		return -EIO;
 	}
 
@@ -175,7 +162,7 @@ static int dht22_measurement(struct dht22_data *data)
 			chksum += ((data->bitstream_read & 0x0000000000FF0000) >> 16);
 			chksum += ((data->bitstream_read & 0x000000000000FF00) >>  8);
 			if(chksum != (data->bitstream_read & 0x00000000000000FF)) {
-				printk("--- dht22_value: incorrect checksum\n");
+				dev_err(data->dev, "incorrect checksum\n");
 				data->checksum_ok = false;
 				return -EAGAIN;
 			}
@@ -183,19 +170,10 @@ static int dht22_measurement(struct dht22_data *data)
 		}
 		data->val_humid = ((data->bitstream_read & 0x000000FFFF000000) >> 24);
 		data->val_temp	= ((data->bitstream_read & 0x0000000000FFFF00) >>  8);
-		printk("HUMIDITY: %d TEMPERATURE: %d\n", data->val_humid, data->val_temp);
+		dev_dbg(data->dev, "HUMIDITY: %d TEMPERATURE: %d\n", data->val_humid, data->val_temp);
 	}
 	
 	return 0;
-#if 0
-			ret = dht22_send_status(data, previous_config);
-			if (ret) {
-				dev_err(data->dev,
-					"CRC validation failed, unable "
-					"to restore device settings\n");
-				return ret;
-			}
-#endif
 }
 
 /**
@@ -312,7 +290,7 @@ static irqreturn_t dht22_interrupt_fired(int irq, void *d)
 	
 	/* compare signal to previous signal: they must differ: 0 1 0 1 0 1 0 1 0 1 0 1 ... */
 	if(signal == data->last_signal) {
-		printk("edgeCount: %d FAILURE signal == last_signal\n", edgeCount);
+		dev_err(data->dev, "edgeCount: %d FAILURE signal == last_signal\n", edgeCount);
 		goto failure;
 	}
 
@@ -329,7 +307,7 @@ static irqreturn_t dht22_interrupt_fired(int irq, void *d)
 			else if(delta_nsec >= 60000 && delta_nsec <= 80000) /* 60 - 80 us ==> bit '1' */ 
 				bitValue = 1;
 			else {
-				printk("edgeCount: %d FAILURE wrong bit length\n", edgeCount);
+				dev_err(data->dev, "edgeCount: %d FAILURE wrong bit length\n", edgeCount);
 				goto failure;
 			}
 
@@ -342,22 +320,22 @@ static irqreturn_t dht22_interrupt_fired(int irq, void *d)
 		else if(signal == 1) {
 			//if(data->bitcount == 40) { /* final separator */
 			//	if(!(delta_nsec >= 45000 && delta_nsec <= 49000)) { /* final separator not in range 45 - 49 us */
-			//		printk("edgeCount: %d bitcount: %d FAILURE wrong last separator length\n", edgeCount, data->bitcount);
+			//		dev_err(data->dev, "edgeCount: %d bitcount: %d FAILURE wrong last separator length\n", edgeCount, data->bitcount);
 			//		goto failure;
 			//	}
 			//}
 			//else if((data->bitcount & 0x7) == 0 && data->bitcount > 0) { /* byte separator */
 			//	if(!(delta_nsec >= 62000 && delta_nsec <= 73000)) { /* byte separator not in range 62 - 73 us */
-			//		printk("edgeCount: %d bitcount: %d FAILURE wrong byte separator length\n", edgeCount, data->bitcount);
+			//		dev_err(data->dev, "edgeCount: %d bitcount: %d FAILURE wrong byte separator length\n", edgeCount, data->bitcount);
 			//		goto failure;
 			//	}
 			//}
 			//else if(!(delta_nsec >= 48000 && delta_nsec <= 56000)) /* separator not in range 48 - 56 us */ {
-			//	printk("edgeCount: %d bitcount: %d FAILURE wrong separator length\n", edgeCount, data->bitcount);
+			//	dev_err(data->dev, "edgeCount: %d bitcount: %d FAILURE wrong separator length\n", edgeCount, data->bitcount);
 			//	goto failure;
 			//}
 			if(!(delta_nsec >= 40000 && delta_nsec <= 70000)) /* separator not in range 40 - 70 us */ {
-				printk("edgeCount: %d bitcount: %d FAILURE wrong separator length\n", edgeCount, data->bitcount);
+				dev_err(data->dev, "edgeCount: %d bitcount: %d FAILURE wrong separator length\n", edgeCount, data->bitcount);
 				goto failure;
 			}
 		}
@@ -374,7 +352,7 @@ static irqreturn_t dht22_interrupt_fired(int irq, void *d)
 		goto wakeup;
 	}
 	else if(edgeCount > 84) {
-		printk("edgeCount: %d FAILURE too many edges\n", edgeCount);
+		dev_err(data->dev, "edgeCount: %d FAILURE too many edges\n", edgeCount);
 		goto failure;
 	}
 	
