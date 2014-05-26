@@ -799,6 +799,14 @@ static struct ads1015_platform_data	polievanie_ads1015_data = {
 	},
 };
 
+#include <linux/spi/mcp23s08.h>
+static const struct mcp23s08_platform_data polievanie_mcp23017_data = {
+	.chip[0] = {
+		.pullups = 0x00ff,
+	},
+	.base = 240,
+};
+
 static struct i2c_board_info __initdata polievanie_i2c_devices[] = {
 	/* RTC hardware clock */
 	{
@@ -812,6 +820,11 @@ static struct i2c_board_info __initdata polievanie_i2c_devices[] = {
 			.type = "ads1015",
 			.platform_data = &polievanie_ads1015_data,
 
+	},
+	/* I2C GPIO expander for LCD 2x16 */
+	{
+		I2C_BOARD_INFO("mcp23017", 0x20),
+			.platform_data = &polievanie_mcp23017_data,
 	},
 };
 
