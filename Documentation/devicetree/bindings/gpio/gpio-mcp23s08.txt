@@ -38,12 +38,31 @@ Required device specific properties (only for SPI chips):
     removed.
 - spi-max-frequency = The maximum frequency this chip is able to handle
 
-Example I2C:
+Optional properties:
+- #interrupt-cells : Should be two.
+  - first cell is the pin number
+  - second cell is used to specify flags.
+- interrupt-controller: Marks the device node as a interrupt controller.
+NOTE: The interrupt functionality is only supported for i2c versions of the
+chips yet.
+
+Optional device specific properties:
+- microchip,irq-mirror: Sets the mirror flag in the IOCON register. This causes
+        devices with two interrupt outputs to always trigger both interrupt
+        outputs regardless where the interrupt happened.
+
+Example I2C (with interrupt):
 gpiom1: gpio@20 {
         compatible = "microchip,mcp23017";
         gpio-controller;
         #gpio-cells = <2>;
         reg = <0x20>;
+
+        interrupt-parent = <&gpio1>;
+        interrupts = <17 IRQ_TYPE_LEVEL_LOW>;
+        interrupt-controller;
+        #interrupt-cells=<2>;
+        microchip,irq-mirror;
 };
 
 Example SPI:
