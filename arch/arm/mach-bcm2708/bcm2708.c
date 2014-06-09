@@ -65,6 +65,8 @@
 #endif
 
 
+#define ARRAY_AND_SIZE(x)	(x), ARRAY_SIZE(x)
+
 /* Effectively we have an IOMMU (ARM<->VideoCore map) that is set up to
  * give us IO access only to 64Mbytes of physical memory (26 bits).  We could
  * represent this window by setting our dmamasks to 26 bits but, in fact
@@ -765,6 +767,34 @@ static void bcm2708_power_off(void)
 }
 
 /* -------------------- I2C ------------------------------ */
+/* Raspberry polievanie: add devices */
+static int polievanie_add_devices(struct device *parent,
+			struct platform_device devices[],
+			size_t num_devices)
+{
+	size_t		i;
+	int		rc;
+
+	for (i = 0; i < num_devices; ++i) {
+		devices[i].dev.parent = parent;
+		rc = platform_device_register(&devices[i]);
+		if (rc < 0)
+			goto out;
+	}
+
+	rc = 0;
+
+out:
+	if (rc < 0) {
+		while (i-- > 0) {
+			platform_device_unregister(&devices[i]);
+			devices[i].dev.parent = NULL;
+		}
+	}
+
+	return rc;
+}
+
 #include <linux/i2c/ads1015.h>
 static struct ads1015_platform_data	polievanie_ads1015_data = {
 	.channel_data = {
@@ -799,6 +829,154 @@ static struct ads1015_platform_data	polievanie_ads1015_data = {
 	},
 };
 
+// MCP23017 GPIO expander for display & buttons
+#include <linux/i2c/mcp23017.h>
+#include <linux/input.h>
+#include <linux/gpio_keys.h>
+
+#define MCP23017_0x20_GPIO_IRQ		22
+#define MCP23017_0x20_GPIO_BASE		64
+
+/* MCP23017 0x20 pin names */
+static char const *mcp23017_0x20_names[16] = {
+	[ 0] = "BTN_SELECT",
+	[ 1] = "BTN_RIGHT",
+	[ 2] = "BTN_DOWN",
+	[ 3] = "BTN_UP",
+	[ 4] = "BTN_LEFT",
+	[ 5] = "A5",
+	[ 6] = "BACKLIGHT",
+	[ 7] = "A7",
+	[ 8] = "B0",
+	[ 9] = "B1",
+	[10] = "B2",
+	[11] = "B3",
+	[12] = "B4",
+	[13] = "B5",
+	[14] = "B6",
+	[15] = "B7",
+};
+
+/* Raspberry polievanie: MCP23017 0x20 input buttons */
+static struct gpio_keys_button polievanie_mcp23017_0x20_buttons[] = {
+	{
+		.code		=  KEY_FN_F1,
+		.type		=  EV_KEY,
+		.gpio		=  MCP23017_0x20_GPIO_BASE + 0,
+		.active_low	=  1,
+		.desc		=  "BTN-SELECT",
+	}, {
+		.code		=  KEY_FN_F2,
+		.type		=  EV_KEY,
+		.gpio		=  MCP23017_0x20_GPIO_BASE + 1,
+		.active_low	=  1,
+		.desc		=  "BTN-RIGHT",
+	}, {
+		.code		=  KEY_FN_F3,
+		.type		=  EV_KEY,
+		.gpio		=  MCP23017_0x20_GPIO_BASE + 2,
+		.active_low	=  1,
+		.desc		=  "BTN-DOWN",
+	}, {
+		.code		=  KEY_FN_F4,
+		.type		=  EV_KEY,
+		.gpio		=  MCP23017_0x20_GPIO_BASE + 3,
+		.active_low	=  1,
+		.desc		=  "BTN-UP",
+	}, {
+		.code		=  KEY_FN_F5,
+		.type		=  EV_KEY,
+		.gpio		=  MCP23017_0x20_GPIO_BASE + 4,
+		.active_low	=  1,
+		.desc		=  "BTN-LEFT",
+	},
+};
+static struct gpio_keys_platform_data polievanie_mcp23017_0x20_button_data = {
+	.buttons	=  polievanie_mcp23017_0x20_buttons+0,
+	.nbuttons	=  ARRAY_SIZE(polievanie_mcp23017_0x20_buttons),
+};
+static struct platform_device polievanie_mcp23017_0x20_devices[] = {
+	{
+		.name	= "gpio-keys",
+		.id	= 1,
+		.dev    = {
+			.platform_data	= &polievanie_mcp23017_0x20_button_data,
+		}
+	},
+};
+
+#include <linux/gpio.h>
+
+/* Raspberry polievanie: MCP23017 0x20 output gpios */
+static struct gpio polievanie_mcp23017_0x20_gpios[] = {
+    {
+        .gpio   = MCP23017_0x20_GPIO_BASE + 6,
+        .flags  = GPIOF_OUT_INIT_LOW,
+        .label  = "BACKLIGHT",
+    },
+};
+
+/* Raspberry polievanie: MCP23017 0x20 setup/teardown functions */
+static int polievanie_mcp23017_0x20_setup(struct i2c_client *client, unsigned gpio,
+			unsigned ngpio, void *ctx)
+{
+    int     rc;
+
+    /* request GPIO's */
+    rc = gpio_request_array(ARRAY_AND_SIZE(polievanie_mcp23017_0x20_gpios));
+    if (rc < 0)
+        return rc;
+
+    /* add input buttons (/dev/input device) */
+    rc = polievanie_add_devices(&client->dev,
+		ARRAY_AND_SIZE(polievanie_mcp23017_0x20_devices));
+
+    if (rc < 0) {
+	/* free GPIO's */
+        gpio_free_array(ARRAY_AND_SIZE(polievanie_mcp23017_0x20_gpios));
+        return rc;
+    }
+
+    /* set active_low on GPIOS */
+    gpio_sysfs_set_active_low(MCP23017_0x20_GPIO_BASE + 6, 1);
+
+    /* export the GPIO 's to userspace */
+    gpio_export(MCP23017_0x20_GPIO_BASE + 6, false);
+
+    return 0;
+}
+static int polievanie_mcp23017_0x20_teardown(struct i2c_client *client, unsigned gpio,
+			unsigned ngpio, void *ctx)
+{
+    size_t i;
+
+    /* unregister input buttons device */
+    for (i = ARRAY_SIZE(polievanie_mcp23017_0x20_devices); i > 0; --i) {
+        platform_device_unregister(&polievanie_mcp23017_0x20_devices[i-1]);
+        polievanie_mcp23017_0x20_devices[i-1].dev.parent = NULL;
+    }
+
+    /* unexport the GPIO 's from userspace */
+    gpio_unexport(MCP23017_0x20_GPIO_BASE + 6);
+
+    /* free GPIO's */
+    gpio_free_array(ARRAY_AND_SIZE(polievanie_mcp23017_0x20_gpios));
+
+    return 0;
+}
+
+static const struct mcp23017_platform_data polievanie_mcp23017_data = {
+		.gpio_base = MCP23017_0x20_GPIO_BASE,
+		.irq_base	=  (MCP23017_0x20_GPIO_BASE + GPIO_IRQ_START),
+		.names		=  mcp23017_0x20_names,
+		.setup		=  polievanie_mcp23017_0x20_setup,
+		.teardown	=  polievanie_mcp23017_0x20_teardown,
+		.pullup		=  0x001F,
+		.inten		=  0x001F,
+};
+
+
+
 static struct i2c_board_info __initdata polievanie_i2c_devices[] = {
 	/* RTC hardware clock */
 	{
@@ -812,6 +990,12 @@ static struct i2c_board_info __initdata polievanie_i2c_devices[] = {
 			.type = "ads1015",
 			.platform_data = &polievanie_ads1015_data,
 
+	},
+	/* I2C GPIO expander for LCD 2x16 */
+	{
+		I2C_BOARD_INFO("mcp23017", 0x20),
+			.platform_data = &polievanie_mcp23017_data,
+			.irq = (MCP23017_0x20_GPIO_IRQ + GPIO_IRQ_START), /* INTA connected to Rpi GPIO #22 */
 	},
 };
 
