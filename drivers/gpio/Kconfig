@@ -401,6 +401,15 @@ config GPIO_MAX732X_IRQ
 	  Say yes here to enable the max732x to be used as an interrupt
 	  controller. It requires the driver to be built in the kernel.
 
+config GPIO_MCP23017
+	tristate "Microchip MCP23017 I/O expander"
+	depends on I2C
+	help
+	  I2C driver for Microchip MCP23017
+	  I/O expanders.
+	  This provides a GPIO interface supporting inputs and outputs.
+	  It provides also support for the interrupt controller.
+
 config GPIO_MC9S08DZ60
 	bool "MX35 3DS BOARD MC9S08DZ60 GPIO functions"
 	depends on I2C=y && MACH_MX35_3DS
