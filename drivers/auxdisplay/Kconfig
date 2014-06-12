@@ -119,4 +119,16 @@ config CFAG12864B_RATE
 	  If you compile this as a module, you can still override this
 	  value using the module parameters.
 
+config HD44780
+	tristate "Hitachi HD44780 GPIO driven LCD Controller"
+	default n
+	---help---
+	  If you have a LCD controlled by HD44780
+	  controller, say Y.
+
+	  To compile this as a module, choose M here:
+	  the module will be called hd44780.
+
+	  If unsure, say N.
+
 endif # AUXDISPLAY
