@@ -778,8 +778,10 @@ static int polievanie_add_devices(struct device *parent,
 	for (i = 0; i < num_devices; ++i) {
 		devices[i].dev.parent = parent;
 		rc = platform_device_register(&devices[i]);
-		if (rc < 0)
+		if (rc < 0) {
+			printk("--- %s device nr %i registration failed rc=%d!!!\n", __func__, i, rc);
 			goto out;
+		}
 	}
 
 	rc = 0;
@@ -895,6 +897,28 @@ static struct gpio_keys_platform_data polievanie_mcp23017_0x20_button_data = {
 	.buttons	=  polievanie_mcp23017_0x20_buttons+0,
 	.nbuttons	=  ARRAY_SIZE(polievanie_mcp23017_0x20_buttons),
 };
+
+#include <linux/gpio.h>
+/* Raspberry polievanie: MCP23017 0x20 output gpios */
+static struct gpio polievanie_mcp23017_0x20_gpios[] = {
+    {
+        .gpio   = MCP23017_0x20_GPIO_BASE + 6,
+        .flags  = GPIOF_OUT_INIT_LOW,
+        .label  = "BACKLIGHT",
+    },
+};
+
+#include <linux/platform_data/hd44780.h>
+static struct hd44780_platform_data polievanie_lcd2x16_data = {
+	.gpio_DB7	= MCP23017_0x20_GPIO_BASE +  9,
+	.gpio_DB6	= MCP23017_0x20_GPIO_BASE + 10,
+	.gpio_DB5	= MCP23017_0x20_GPIO_BASE + 11,
+	.gpio_DB4	= MCP23017_0x20_GPIO_BASE + 12,
+	.gpio_E		= MCP23017_0x20_GPIO_BASE + 13,
+	.gpio_RW	= MCP23017_0x20_GPIO_BASE + 14,
+	.gpio_RS	= MCP23017_0x20_GPIO_BASE + 15,
+};
+
 static struct platform_device polievanie_mcp23017_0x20_devices[] = {
 	{
 		.name	= "gpio-keys",
@@ -903,17 +927,13 @@ static struct platform_device polievanie_mcp23017_0x20_devices[] = {
 			.platform_data	= &polievanie_mcp23017_0x20_button_data,
 		}
 	},
-};
-
-#include <linux/gpio.h>
-
-/* Raspberry polievanie: MCP23017 0x20 output gpios */
-static struct gpio polievanie_mcp23017_0x20_gpios[] = {
-    {
-        .gpio   = MCP23017_0x20_GPIO_BASE + 6,
-        .flags  = GPIOF_OUT_INIT_LOW,
-        .label  = "BACKLIGHT",
-    },
+	{
+		.name	= "hd44780",
+		.id	= -1,
+		.dev    = {
+			.platform_data	= &polievanie_lcd2x16_data,
+		}
+	},
 };
 
 /* Raspberry polievanie: MCP23017 0x20 setup/teardown functions */
@@ -973,6 +993,7 @@ static const struct mcp23017_platform_data polievanie_mcp23017_data = {
 		.teardown	=  polievanie_mcp23017_0x20_teardown,
 		.pullup		=  0x001F,
 		.inten		=  0x001F,
+		.int_mirror	=  true,
 };
 
 
