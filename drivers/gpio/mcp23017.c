@@ -385,7 +385,17 @@ uint8_t mcp23017_get_reg8(struct device *dev, unsigned reg_offset) {
 }
 EXPORT_SYMBOL_GPL(mcp23017_get_reg8);
 
-void mcp23017_set_reg8(struct device *dev, unsigned reg_offset, uint8_t val) {
+uint8_t mcp23017_get_input8A(struct device *dev) {
+	return mcp23017_get_reg8(dev, 0x12);
+}
+EXPORT_SYMBOL_GPL(mcp23017_get_input8A);
+
+uint8_t mcp23017_get_input8B(struct device *dev) {
+	return mcp23017_get_reg8(dev, 0x13);
+}
+EXPORT_SYMBOL_GPL(mcp23017_get_input8B);
+
+void mcp23017_set_reg8(struct device *dev, unsigned reg_offset, uint8_t val, uint8_t mask) {
 	int ret;
 	uint16_t reg_val = 0;
 	struct i2c_client *client = to_i2c_client(dev);
@@ -399,8 +409,8 @@ void mcp23017_set_reg8(struct device *dev, unsigned reg_offset, uint8_t val) {
 			case MCP_OLAT:
 				reg_val = (
 					(reg_offset  & 0x1)
-					? ((chip->reg_output	& 0x00ff) | (val << 8))	/* OLATB */
-					: ((chip->reg_output	& 0xff00) | val       )	/* OLATA */
+					? ((chip->reg_output	& 0x00ff) | ((val & mask) << 8))	/* OLATB */
+					: ((chip->reg_output	& 0xff00) | (val & mask)       )	/* OLATA */
 				);
 				break;
 		}
@@ -420,6 +430,16 @@ void mcp23017_set_reg8(struct device *dev, unsigned reg_offset, uint8_t val) {
 	}
 }
 EXPORT_SYMBOL_GPL(mcp23017_set_reg8);
+
+void mcp23017_set_output8A(struct device *dev, uint8_t val, uint8_t mask) {
+	mcp23017_set_reg8(dev, 0x14, val, mask);
+}
+EXPORT_SYMBOL_GPL(mcp23017_set_output8A);
+
+void mcp23017_set_output8B(struct device *dev, uint8_t val, uint8_t mask) {
+	mcp23017_set_reg8(dev, 0x15, val, mask);
+}
+EXPORT_SYMBOL_GPL(mcp23017_set_output8B);
 
 static void mcp23017_setup_gpio(struct mcp23017_chip *chip, int gpios)
 {

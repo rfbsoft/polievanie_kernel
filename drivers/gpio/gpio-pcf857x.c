@@ -70,6 +70,7 @@ struct pcf857x {
 	struct irq_domain	*irq_domain;	/* for irq demux  */
 	spinlock_t		slock;		/* protect irq demux */
 	unsigned		out;		/* software latch */
+	// TODO: direction register !!!
 	unsigned		status;		/* current status */
 	int			irq;		/* real irq number */
 
@@ -158,6 +159,29 @@ static void pcf857x_set(struct gpio_chip *chip, unsigned offset, int value)
 {
 	pcf857x_output(chip, offset, value);
 }
+
+uint8_t pcf857x_get_input8(struct device *dev) {
+	// TODO !!!
+	return 0;
+}
+EXPORT_SYMBOL_GPL(pcf857x_get_input8);
+
+void pcf857x_set_output8(struct device *dev, uint8_t val, uint8_t mask) {
+	struct i2c_client *client = to_i2c_client(dev);
+	struct pcf857x *gpio = i2c_get_clientdata(client);
+	int ret;
+	unsigned reg_val;
+
+	mutex_lock(&gpio->lock);
+	reg_val = gpio->out;
+	reg_val &= ~mask;
+	reg_val |= (val & mask);
+	ret = gpio->write(gpio->client, reg_val);
+	if(ret == 0)
+		gpio->out = reg_val;
+	mutex_unlock(&gpio->lock);
+}
+EXPORT_SYMBOL_GPL(pcf857x_set_output8);
 
 /*-------------------------------------------------------------------------*/
 

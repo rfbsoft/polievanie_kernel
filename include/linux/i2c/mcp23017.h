@@ -5,7 +5,12 @@
 #include <linux/i2c.h>
 
 uint8_t mcp23017_get_reg8(struct device *dev, unsigned reg_offset);
-void mcp23017_set_reg8(struct device *dev, unsigned reg_offset, uint8_t val);
+void mcp23017_set_reg8(struct device *dev, unsigned reg_offset, uint8_t val, uint8_t mask);
+
+uint8_t mcp23017_get_input8A(struct device *dev);
+uint8_t mcp23017_get_input8B(struct device *dev);
+void mcp23017_set_output8A(struct device *dev, uint8_t val, uint8_t mask);
+void mcp23017_set_output8B(struct device *dev, uint8_t val, uint8_t mask);
 
 /* platform data for the MCP23017 16-bit I2C I/O expander driver */
 struct mcp23017_platform_data {

@@ -1,6 +1,9 @@
 #ifndef __LINUX_PCF857X_H
 #define __LINUX_PCF857X_H
 
+uint8_t pcf857x_get_input8(struct device *dev);
+void pcf857x_set_output8(struct device *dev, uint8_t val, uint8_t mask);
+
 /**
  * struct pcf857x_platform_data - data to set up pcf857x driver
  * @gpio_base: number of the chip's first GPIO
