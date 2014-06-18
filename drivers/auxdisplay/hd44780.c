@@ -20,7 +20,7 @@
 #include <linux/hwmon-sysfs.h>
 #include <linux/ctype.h>
 #include <linux/platform_data/hd44780.h>
-#include <linux/i2c/mcp23017.h>
+//#include <linux/i2c/mcp23017.h>
 #include <generated/utsrelease.h>
 
 #define ARRAY_AND_SIZE(x)	(x), ARRAY_SIZE(x)
@@ -75,9 +75,14 @@
 #define HD_CMD_SET_DDRAM		0x80U
 
 /* --- commands duration in useconds --- */
-#define HD_CMD_DURATION_HOME		1500
-#define HD_CMD_DURATION_WRITECHAR	45
-#define HD_CMD_DURATION			40
+//#define HD_CMD_DURATION_CLEAR		1500
+//#define HD_CMD_DURATION_HOME		1500
+//#define HD_CMD_DURATION_WRITECHAR	45
+//#define HD_CMD_DURATION			40
+#define HD_CMD_DURATION_CLEAR		2000
+#define HD_CMD_DURATION_HOME		2000
+#define HD_CMD_DURATION_WRITECHAR	70
+#define HD_CMD_DURATION				60
 
 /* --- sysfs hook indexes --- */
 #define LCD_CLEAR		 0
@@ -111,6 +116,8 @@ struct hd44780 {
 	/*   C (C)ursor:              ON      / OFF     */
 	/*   B cursor (B)link:        ON      / OFF     */
 	uint8_t status_dispctrl;
+
+	uint8_t gpio_port8_mask; /* ignore 0 bits */
 };
 
 static struct gpio hd44780_gpios[] = {
@@ -147,82 +154,62 @@ static struct gpio hd44780_gpios[] = {
 static void hd44780_4bit_command(struct hd44780 *lcd, u8 cmd)
 {
 	struct hd44780_platform_data * pdata = lcd->dev->platform_data;
+	uint8_t out8;
 
-	/*
-	OLATB register
-	bit0 (0x01): x
-	bit1 (0x02): gpio-73  (DB7                 ) out lo
-	bit2 (0x04): gpio-74  (DB6                 ) out lo
-	bit3 (0x08): gpio-75  (DB5                 ) out lo
-	bit4 (0x10): gpio-76  (DB4                 ) out lo
-	bit5 (0x20): gpio-77  (E                   ) out lo
-	bit6 (0x40): gpio-78  (R/W                 ) out lo
-	bit7 (0x80): gpio-79  (RS                  ) out lo
-	*/
-	uint8_t olat_b;
+	if(pdata->set_output8) {
+		out8 = 0x0;			// all bits low
+		out8 |= pdata->bit_E; 		// E = high
+		if(cmd & 0x10) out8 |= pdata->bit_DB4;	// DB4 ~ cmd4
+		if(cmd & 0x20) out8 |= pdata->bit_DB5;	// DB5 ~ cmd5
+		if(cmd & 0x40) out8 |= pdata->bit_DB6;	// DB6 ~ cmd6
+		if(cmd & 0x80) out8 |= pdata->bit_DB7;	// DB7 ~ cmd7
 
-	olat_b = 0x0;			// all bits low
-	olat_b |= 0x20; 		// E = high
-	if(cmd & 0x10) olat_b |= 0x10;	// DB4 ~ cmd4
-	if(cmd & 0x20) olat_b |= 0x08;	// DB5 ~ cmd5
-	if(cmd & 0x40) olat_b |= 0x04;	// DB6 ~ cmd6
-	if(cmd & 0x80) olat_b |= 0x02;	// DB7 ~ cmd7
+		(*(pdata->set_output8))(lcd->dev->parent, out8, lcd->gpio_port8_mask);
+		out8 &= ~(pdata->bit_E); // E = low
+		(*(pdata->set_output8))(lcd->dev->parent, out8, lcd->gpio_port8_mask);
 
-	mcp23017_set_reg8(lcd->dev->parent, 0x15, olat_b);
-	olat_b &= ~0x20; // E = low
-	mcp23017_set_reg8(lcd->dev->parent, 0x15, olat_b);
+		out8 |= pdata->bit_E; 		// E = high
+		out8 &= ~(pdata->bit_DB4 | pdata->bit_DB5 | pdata->bit_DB6 | pdata->bit_DB7); // clear DB4 to DB7
+		if(cmd & 0x01) out8 |= pdata->bit_DB4;	// DB4 ~ cmd0
+		if(cmd & 0x02) out8 |= pdata->bit_DB5;	// DB5 ~ cmd1
+		if(cmd & 0x04) out8 |= pdata->bit_DB6;	// DB6 ~ cmd2
+		if(cmd & 0x08) out8 |= pdata->bit_DB7;	// DB7 ~ cmd3
 
-	olat_b |= 0x20; 		// E = high
-	olat_b &= ~0x1E; 		// clear DB4 to DB7
-	if(cmd & 0x01) olat_b |= 0x10;	// DB4 ~ cmd0
-	if(cmd & 0x02) olat_b |= 0x08;	// DB5 ~ cmd1
-	if(cmd & 0x04) olat_b |= 0x04;	// DB6 ~ cmd2
-	if(cmd & 0x08) olat_b |= 0x02;	// DB7 ~ cmd3
-
-	mcp23017_set_reg8(lcd->dev->parent, 0x15, olat_b);
-	olat_b &= ~0x20; // E = low
-	mcp23017_set_reg8(lcd->dev->parent, 0x15, olat_b);
+		(*(pdata->set_output8))(lcd->dev->parent, out8, lcd->gpio_port8_mask);
+		out8 &= ~(pdata->bit_E); // E = low
+		(*(pdata->set_output8))(lcd->dev->parent, out8, lcd->gpio_port8_mask);
+	}
 }
 
 static void hd44780_4bit_char(struct hd44780 *lcd, u8 ch)
 {
 	struct hd44780_platform_data * pdata = lcd->dev->platform_data;
+	uint8_t out8;
 
-	/*
-	OLATB register
-	bit0 (0x01): x
-	bit1 (0x02): gpio-73  (DB7                 ) out lo
-	bit2 (0x04): gpio-74  (DB6                 ) out lo
-	bit3 (0x08): gpio-75  (DB5                 ) out lo
-	bit4 (0x10): gpio-76  (DB4                 ) out lo
-	bit5 (0x20): gpio-77  (E                   ) out lo
-	bit6 (0x40): gpio-78  (R/W                 ) out lo
-	bit7 (0x80): gpio-79  (RS                  ) out lo
-	*/
-	uint8_t olat_b;
+	if(pdata->set_output8) {
+		out8 = 0x0;			// all bits low
+		out8 |= pdata->bit_E; 		// E = high
+		out8 |= pdata->bit_RS; 		// RS = high
+		if(ch & 0x10) out8 |= pdata->bit_DB4;	// DB4 ~ ch4
+		if(ch & 0x20) out8 |= pdata->bit_DB5;	// DB5 ~ ch5
+		if(ch & 0x40) out8 |= pdata->bit_DB6;	// DB6 ~ ch6
+		if(ch & 0x80) out8 |= pdata->bit_DB7;	// DB7 ~ ch7
 
-	olat_b = 0x0;			// all bits low
-	olat_b |= 0x20; 		// E = high
-	olat_b |= 0x80; 		// RS = high
-	if(ch & 0x10) olat_b |= 0x10;	// DB4 ~ ch4
-	if(ch & 0x20) olat_b |= 0x08;	// DB5 ~ ch5
-	if(ch & 0x40) olat_b |= 0x04;	// DB6 ~ ch6
-	if(ch & 0x80) olat_b |= 0x02;	// DB7 ~ ch7
+		(*(pdata->set_output8))(lcd->dev->parent, out8, lcd->gpio_port8_mask);
+		out8 &= ~(pdata->bit_E); // E = low
+		(*(pdata->set_output8))(lcd->dev->parent, out8, lcd->gpio_port8_mask);
 
-	mcp23017_set_reg8(lcd->dev->parent, 0x15, olat_b);
-	olat_b &= ~0x20; // E = low
-	mcp23017_set_reg8(lcd->dev->parent, 0x15, olat_b);
+		out8 |= pdata->bit_E; 		// E = high
+		out8 &= ~(pdata->bit_DB4 | pdata->bit_DB5 | pdata->bit_DB6 | pdata->bit_DB7); // clear DB4 to DB7
+		if(ch & 0x01) out8 |= pdata->bit_DB4;	// DB4 ~ ch0
+		if(ch & 0x02) out8 |= pdata->bit_DB5;	// DB5 ~ ch1
+		if(ch & 0x04) out8 |= pdata->bit_DB6;	// DB6 ~ ch2
+		if(ch & 0x08) out8 |= pdata->bit_DB7;	// DB7 ~ ch3
 
-	olat_b |= 0x20; 		// E = high
-	olat_b &= ~0x1E; 		// clear DB4 to DB7
-	if(ch & 0x01) olat_b |= 0x10;	// DB4 ~ ch0
-	if(ch & 0x02) olat_b |= 0x08;	// DB5 ~ ch1
-	if(ch & 0x04) olat_b |= 0x04;	// DB6 ~ ch2
-	if(ch & 0x08) olat_b |= 0x02;	// DB7 ~ ch3
-
-	mcp23017_set_reg8(lcd->dev->parent, 0x15, olat_b);
-	olat_b &= ~0x20; // E = low
-	mcp23017_set_reg8(lcd->dev->parent, 0x15, olat_b);
+		(*(pdata->set_output8))(lcd->dev->parent, out8, lcd->gpio_port8_mask);
+		out8 &= ~(pdata->bit_E); // E = low
+		(*(pdata->set_output8))(lcd->dev->parent, out8, lcd->gpio_port8_mask);
+	}
 }
 
 static void hd44780_4bit_print(struct hd44780 *lcd, int line, const char *str)
@@ -270,30 +257,20 @@ static void hd44780_4bit_rawprint(struct hd44780 *lcd, const char *str)
 static void hd44780_8bit_command(struct hd44780 *lcd, u8 cmd)
 {
 	struct hd44780_platform_data * pdata = lcd->dev->platform_data;
+	uint8_t out8;
 
-	/*
-	OLATB register
-	bit0 (0x01): x
-	bit1 (0x02): gpio-73  (DB7                 ) out lo
-	bit2 (0x04): gpio-74  (DB6                 ) out lo
-	bit3 (0x08): gpio-75  (DB5                 ) out lo
-	bit4 (0x10): gpio-76  (DB4                 ) out lo
-	bit5 (0x20): gpio-77  (E                   ) out lo
-	bit6 (0x40): gpio-78  (R/W                 ) out lo
-	bit7 (0x80): gpio-79  (RS                  ) out lo
-	*/
-	uint8_t olat_b;
+	if(pdata->set_output8) {
+		out8 = 0x0;			// all bits low
+		out8 |= pdata->bit_E; 		// E = high
+		if(cmd & 0x10) out8 |= pdata->bit_DB4;	// DB4
+		if(cmd & 0x20) out8 |= pdata->bit_DB5;	// DB5
+		if(cmd & 0x40) out8 |= pdata->bit_DB6;	// DB6
+		if(cmd & 0x80) out8 |= pdata->bit_DB7;	// DB7
 
-	olat_b = 0x0;			// all bits low
-	olat_b |= 0x20; 		// E = high
-	if(cmd & 0x10) olat_b |= 0x10;	// DB4
-	if(cmd & 0x20) olat_b |= 0x08;	// DB5
-	if(cmd & 0x40) olat_b |= 0x04;	// DB6
-	if(cmd & 0x80) olat_b |= 0x02;	// DB7
-
-	mcp23017_set_reg8(lcd->dev->parent, 0x15, olat_b);
-	olat_b &= ~0x20; // E = low
-	mcp23017_set_reg8(lcd->dev->parent, 0x15, olat_b);
+		(*(pdata->set_output8))(lcd->dev->parent, out8, lcd->gpio_port8_mask);
+		out8 &= ~(pdata->bit_E); // E = low
+		(*(pdata->set_output8))(lcd->dev->parent, out8, lcd->gpio_port8_mask);
+	}
 }
 
 static void hd44780_4bit_init(struct hd44780 *lcd)
@@ -327,7 +304,7 @@ static void hd44780_4bit_init(struct hd44780 *lcd)
 	mutex_unlock(&lcd->status_lock);
 
 	hd44780_4bit_command(lcd, HD_CMD_CLEAR);
-	udelay(HD_CMD_DURATION);
+	udelay(HD_CMD_DURATION_CLEAR);
 	hd44780_4bit_command(lcd, HD_CMD_HOME);
 	udelay(HD_CMD_DURATION_HOME);
 	/* Put something useful in the display */
@@ -453,7 +430,7 @@ static ssize_t hd44780_print(struct device *dev, struct device_attribute *attr,
 	switch(psa->index) {
 		case LCD_CLEAR:
 			hd44780_4bit_command(lcd, HD_CMD_CLEAR);
-			udelay(HD_CMD_DURATION);
+			udelay(HD_CMD_DURATION_CLEAR);
 			break;
 		case LCD_HOME:
 			hd44780_4bit_command(lcd, HD_CMD_HOME);
@@ -524,13 +501,13 @@ static ssize_t hd44780_print(struct device *dev, struct device_attribute *attr,
 		case LCD_DISPSHIFTLEFT:
 			for(i = 0; i < val; ++i) {
 				hd44780_4bit_command(lcd, HD_CMD_SHIFT | HD_CMD_SHIFT_DISPLAY);
-				udelay(HD_CMD_DURATION);
+				udelay(HD_CMD_DURATION_CLEAR);
 			}
 			break;
 		case LCD_DISPSHIFTRIGHT:
 			for(i = 0; i < val; ++i) {
 				hd44780_4bit_command(lcd, HD_CMD_SHIFT | HD_CMD_SHIFT_DISPLAY | HD_CMD_SHIFT_RIGHT);
-				udelay(HD_CMD_DURATION);
+				udelay(HD_CMD_DURATION_CLEAR);
 			}
 			break;
 		case LCD_PRINT1:
@@ -630,6 +607,18 @@ static int /*__init*/ hd44780_probe(struct platform_device *pdev)
 	hd44780_gpios[4].gpio = pdata->gpio_DB5;
 	hd44780_gpios[5].gpio = pdata->gpio_DB6;
 	hd44780_gpios[6].gpio = pdata->gpio_DB7;
+
+	/* create gpio port mask */
+	if(pdata->set_output8) {
+		lcd->gpio_port8_mask = 0x0;
+		lcd->gpio_port8_mask |= pdata->bit_RS;
+		lcd->gpio_port8_mask |= pdata->bit_RW;
+		lcd->gpio_port8_mask |= pdata->bit_E;
+		lcd->gpio_port8_mask |= pdata->bit_DB4;
+		lcd->gpio_port8_mask |= pdata->bit_DB5;
+		lcd->gpio_port8_mask |= pdata->bit_DB6;
+		lcd->gpio_port8_mask |= pdata->bit_DB7;
+	}
 
 	/* request GPIO's */
 	ret = gpio_request_array(ARRAY_AND_SIZE(hd44780_gpios));
