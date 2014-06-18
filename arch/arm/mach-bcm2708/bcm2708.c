@@ -904,19 +904,30 @@ static struct gpio polievanie_mcp23017_0x20_gpios[] = {
     {
         .gpio   = MCP23017_0x20_GPIO_BASE + 6,
         .flags  = GPIOF_OUT_INIT_LOW,
-        .label  = "BACKLIGHT",
+        .label  = "BACKLIGHT2x16",
     },
 };
 
 #include <linux/platform_data/hd44780.h>
 static struct hd44780_platform_data polievanie_lcd2x16_data = {
-	.gpio_DB7	= MCP23017_0x20_GPIO_BASE +  9,
-	.gpio_DB6	= MCP23017_0x20_GPIO_BASE + 10,
-	.gpio_DB5	= MCP23017_0x20_GPIO_BASE + 11,
-	.gpio_DB4	= MCP23017_0x20_GPIO_BASE + 12,
-	.gpio_E		= MCP23017_0x20_GPIO_BASE + 13,
-	.gpio_RW	= MCP23017_0x20_GPIO_BASE + 14,
-	.gpio_RS	= MCP23017_0x20_GPIO_BASE + 15,
+	.gpio_DB7	 = MCP23017_0x20_GPIO_BASE +  9,
+	.gpio_DB6	 = MCP23017_0x20_GPIO_BASE + 10,
+	.gpio_DB5	 = MCP23017_0x20_GPIO_BASE + 11,
+	.gpio_DB4	 = MCP23017_0x20_GPIO_BASE + 12,
+	.gpio_E		 = MCP23017_0x20_GPIO_BASE + 13,
+	.gpio_RW	 = MCP23017_0x20_GPIO_BASE + 14,
+	.gpio_RS	 = MCP23017_0x20_GPIO_BASE + 15,
+
+	.bit_RS      = (1 << 7),
+	.bit_RW      = (1 << 6),
+	.bit_E       = (1 << 5),
+	.bit_DB4     = (1 << 4),
+	.bit_DB5     = (1 << 3),
+	.bit_DB6     = (1 << 2),
+	.bit_DB7     = (1 << 1),
+
+	.get_input8  = mcp23017_get_input8B,
+	.set_output8 = mcp23017_set_output8B,
 };
 
 static struct platform_device polievanie_mcp23017_0x20_devices[] = {
@@ -929,7 +940,7 @@ static struct platform_device polievanie_mcp23017_0x20_devices[] = {
 	},
 	{
 		.name	= "hd44780",
-		.id	= -1,
+		.id	= 1,
 		.dev    = {
 			.platform_data	= &polievanie_lcd2x16_data,
 		}
@@ -996,7 +1007,116 @@ static const struct mcp23017_platform_data polievanie_mcp23017_data = {
 		.int_mirror	=  true,
 };
 
+#include <linux/i2c/pcf857x.h>
 
+#define PCF8574_0x3F_GPIO_BASE		96
+
+///* PCF8574 0x3F pin names */
+//static char const *pcf8574_0x3f_names[8] = {
+//	[ 0] = "P0",
+//	[ 1] = "P1",
+//	[ 2] = "P2",
+//	[ 3] = "BACKLIHT4x20",
+//	[ 4] = "P4",
+//	[ 5] = "P5",
+//	[ 6] = "P6",
+//	[ 7] = "P7",
+//};
+
+/* Raspberry polievanie: PCF8574 0x3f output gpios */
+static struct gpio polievanie_pcf8574_0x3f_gpios[] = {
+    {
+        .gpio   = PCF8574_0x3F_GPIO_BASE + 3,
+        .flags  = GPIOF_OUT_INIT_HIGH,
+        .label  = "BACKLIGHT4x20",
+    },
+};
+
+static struct hd44780_platform_data polievanie_lcd4x20_data = {
+	.gpio_DB7	 = PCF8574_0x3F_GPIO_BASE + 7,
+	.gpio_DB6	 = PCF8574_0x3F_GPIO_BASE + 6,
+	.gpio_DB5	 = PCF8574_0x3F_GPIO_BASE + 5,
+	.gpio_DB4	 = PCF8574_0x3F_GPIO_BASE + 4,
+	.gpio_E		 = PCF8574_0x3F_GPIO_BASE + 2,
+	.gpio_RW	 = PCF8574_0x3F_GPIO_BASE + 1,
+	.gpio_RS	 = PCF8574_0x3F_GPIO_BASE + 0,
+
+	.bit_RS      = (1 << 0),
+	.bit_RW      = (1 << 1),
+	.bit_E       = (1 << 2),
+	.bit_DB4     = (1 << 4),
+	.bit_DB5     = (1 << 5),
+	.bit_DB6     = (1 << 6),
+	.bit_DB7     = (1 << 7),
+
+	.get_input8  = pcf857x_get_input8,
+	.set_output8 = pcf857x_set_output8,
+};
+
+static struct platform_device polievanie_pcf8574_0x3f_devices[] = {
+	{
+		.name	= "hd44780",
+		.id	= 2,
+		.dev    = {
+			.platform_data	= &polievanie_lcd4x20_data,
+		}
+	},
+};
+
+/* Raspberry polievanie: PCF8574 0x3f setup/teardown functions */
+static int polievanie_pcf8574_0x3f_setup(struct i2c_client *client, unsigned gpio,
+			unsigned ngpio, void *ctx)
+{
+    int     rc;
+
+    /* request GPIO's */
+    rc = gpio_request_array(ARRAY_AND_SIZE(polievanie_pcf8574_0x3f_gpios));
+    if (rc < 0)
+        return rc;
+
+    /* add hd44780 LCD driver */
+    rc = polievanie_add_devices(&client->dev,
+		ARRAY_AND_SIZE(polievanie_pcf8574_0x3f_devices));
+
+    if (rc < 0) {
+    	/* free GPIO's */
+        gpio_free_array(ARRAY_AND_SIZE(polievanie_pcf8574_0x3f_gpios));
+        return rc;
+    }
+
+//    /* set active_low on GPIOS */
+//    gpio_sysfs_set_active_low(PCF8574_0x3F_GPIO_BASE + 3, 0);
+
+    /* export the GPIO 's to userspace */
+    gpio_export(PCF8574_0x3F_GPIO_BASE + 3, false);
+
+    return 0;
+}
+static int polievanie_pcf8574_0x3f_teardown(struct i2c_client *client, unsigned gpio,
+			unsigned ngpio, void *ctx)
+{
+    size_t i;
+
+    /* unregister hd44780 LCD driver */
+    for (i = ARRAY_SIZE(polievanie_pcf8574_0x3f_devices); i > 0; --i) {
+        platform_device_unregister(&polievanie_pcf8574_0x3f_devices[i-1]);
+        polievanie_pcf8574_0x3f_devices[i-1].dev.parent = NULL;
+    }
+
+    /* unexport the GPIO 's from userspace */
+    gpio_unexport(PCF8574_0x3F_GPIO_BASE + 3);
+
+    /* free GPIO's */
+    gpio_free_array(ARRAY_AND_SIZE(polievanie_pcf8574_0x3f_gpios));
+
+    return 0;
+}
+
+static const struct pcf857x_platform_data polievanie_pcf857x_data = {
+		.gpio_base	= PCF8574_0x3F_GPIO_BASE,
+		.setup		= polievanie_pcf8574_0x3f_setup,
+		.teardown	= polievanie_pcf8574_0x3f_teardown,
+};
 
 static struct i2c_board_info __initdata polievanie_i2c_devices[] = {
 	/* RTC hardware clock */
@@ -1017,6 +1137,11 @@ static struct i2c_board_info __initdata polievanie_i2c_devices[] = {
 		I2C_BOARD_INFO("mcp23017", 0x20),
 			.platform_data = &polievanie_mcp23017_data,
 			.irq = (MCP23017_0x20_GPIO_IRQ + GPIO_IRQ_START), /* INTA connected to Rpi GPIO #22 */
+	},
+	/* I2C GPIO expander for LCD 2x16 */
+	{
+		I2C_BOARD_INFO("pcf8574", 0x3f),
+			.platform_data = &polievanie_pcf857x_data,
 	},
 };
 
