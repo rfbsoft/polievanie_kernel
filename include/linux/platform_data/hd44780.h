@@ -7,10 +7,17 @@
 #ifndef __LINUX_PLATFORM_DATA_HD44780_H__
 #define __LINUX_PLATFORM_DATA_HD44780_H__
 
+#define HD44780_MAX_ROWS	10
+#define HD44780_MAX_COLS	80
 /**
  * struct hd44780_platform_data - Platform data for the HD44780 LCD driver
  **/
 struct hd44780_platform_data {
+	/* display geometry */
+	int rows;
+	int cols;
+	int row_offset[HD44780_MAX_ROWS];
+
 	/* single GPIO's */
 	int gpio_RS;
 	int gpio_RW;

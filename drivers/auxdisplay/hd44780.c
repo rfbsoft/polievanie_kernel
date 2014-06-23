@@ -20,7 +20,6 @@
 #include <linux/hwmon-sysfs.h>
 #include <linux/ctype.h>
 #include <linux/platform_data/hd44780.h>
-//#include <linux/i2c/mcp23017.h>
 #include <generated/utsrelease.h>
 
 #define ARRAY_AND_SIZE(x)	(x), ARRAY_SIZE(x)
@@ -96,9 +95,10 @@
 #define LCD_CURSSHIFTRIGHT	 8
 #define LCD_DISPSHIFTLEFT	 9
 #define LCD_DISPSHIFTRIGHT	10
-#define LCD_PRINT1		11
-#define LCD_PRINT2		12
-#define LCD_PRINTRAW		13
+#define LCD_PRINT			11
+#define LCD_PRINTRAW		12
+#define LCD_ROWS			13
+#define LCD_COLS			14
 
 /**
  * @dev: a pointer back to containing device
@@ -118,6 +118,7 @@ struct hd44780 {
 	uint8_t status_dispctrl;
 
 	uint8_t gpio_port8_mask; /* ignore 0 bits */
+
 };
 
 static struct gpio hd44780_gpios[] = {
@@ -214,18 +215,13 @@ static void hd44780_4bit_char(struct hd44780 *lcd, u8 ch)
 
 static void hd44780_4bit_print(struct hd44780 *lcd, int line, const char *str)
 {
+	struct hd44780_platform_data * pdata = lcd->dev->platform_data;
 	u8 offset;
 	int i;
 
-	/*
-	 * We support line 0, 1
-	 * Line 1 runs from 0x00..0x27
-	 * Line 2 runs from 0x28..0x4f
-	 */
-	if (line == 0)
-		offset = 0;
-	else if (line == 1)
-		offset = 0x28;
+	/* get line offset */
+	if(line >= 0 && line < pdata->rows)
+		offset = pdata->row_offset[line];
 	else
 		return;
 
@@ -234,7 +230,7 @@ static void hd44780_4bit_print(struct hd44780 *lcd, int line, const char *str)
 	udelay(HD_CMD_DURATION);
 
 	/* Send string */
-	for (i = 0; i < 0x28; ++i) {
+	for (i = 0; i < pdata->cols; ++i) {
 		if(i < strlen(str))
 			hd44780_4bit_char(lcd, str[i]);
 		else
@@ -313,59 +309,38 @@ static void hd44780_4bit_init(struct hd44780 *lcd)
 }
 
 /* ------------------ sysfs hooks BEGIN ------------------------ */
-#if 0
-static ssize_t mcp23017_show(struct device *dev, struct device_attribute *attr,
+static ssize_t hd44780_show(struct device *dev, struct device_attribute *attr,
 			    char *buf)
 {
-	struct i2c_client *client = to_i2c_client(dev);
-	struct mcp23017_chip *chip = i2c_get_clientdata(client);
+	struct platform_device * pdev = to_platform_device(dev);
+	struct hd44780 *lcd = platform_get_drvdata(pdev);
+	struct hd44780_platform_data * pdata = lcd->dev->platform_data;
+	struct sensor_device_attribute * psa = to_sensor_dev_attr(attr);
 
-	struct sensor_device_attribute *	psa	= to_sensor_dev_attr(attr);
-	uint16_t reg_val;
-	int ret, reg_offset = 0;
-
-	reg_offset = (psa->index) >> 1;
-
-	/* reading allowed from these registers */
-	if(
-		reg_offset != MCP_GPIO &&
-		reg_offset != MCP_OLAT &&
-		reg_offset != MCP_IODIR &&
-		reg_offset != MCP_GPINTEN &&
-		reg_offset != MCP_GPPU
-	)
-		return -EINVAL;
-
-	mutex_lock(&chip->i2c_lock);
-	ret = mcp23017_read_reg(chip, reg_offset, &reg_val);
-	mutex_unlock(&chip->i2c_lock);
-	if (ret < 0) {
-		/* NOTE:  diagnostic already emitted; that's all we should
-		 * do unless gpio_*_value_cansleep() calls become different
-		 * from their nonsleeping siblings (and report faults).
-		 */
-		return ret;
+	switch(psa->index) {
+		case LCD_ROWS:
+			return sprintf(buf, "%d\n", pdata->rows);
+			break;
+		case LCD_COLS:
+			return sprintf(buf, "%d\n", pdata->cols);
+			break;
+		default:
+			return -EINVAL;
 	}
-
-	return sprintf(buf, "0x%02x\n", (
-			(psa->index & 0x1)
-			? ((reg_val & 0xff00) >> 8)
-			:  (reg_val & 0x00ff)
-		)
-	);
 }
-#endif
 
-static ssize_t hd44780_print(struct device *dev, struct device_attribute *attr,
+static ssize_t hd44780_store(struct device *dev, struct device_attribute *attr,
 			     const char *buf, size_t count)
 {
 	struct platform_device * pdev = to_platform_device(dev);
 	struct hd44780 *lcd = platform_get_drvdata(pdev);
+	struct hd44780_platform_data * pdata = lcd->dev->platform_data;
 	struct sensor_device_attribute * psa = to_sensor_dev_attr(attr);
 
 	unsigned long val;
 	char * endp;
 	int i;
+	int line;
 
 	/* get numeric value */
 	switch(psa->index) {
@@ -412,8 +387,7 @@ static ssize_t hd44780_print(struct device *dev, struct device_attribute *attr,
 
 	/* formatted print settings */
 	switch(psa->index) {
-		case LCD_PRINT1:
-		case LCD_PRINT2:
+		case LCD_PRINT:
 			mutex_lock(&lcd->status_lock);
 			lcd->status_entrymode |= HD_CMD_ENTRYMODE_INCREMENT;
 			hd44780_4bit_command(lcd, lcd->status_entrymode);
@@ -501,22 +475,22 @@ static ssize_t hd44780_print(struct device *dev, struct device_attribute *attr,
 		case LCD_DISPSHIFTLEFT:
 			for(i = 0; i < val; ++i) {
 				hd44780_4bit_command(lcd, HD_CMD_SHIFT | HD_CMD_SHIFT_DISPLAY);
-				udelay(HD_CMD_DURATION_CLEAR);
+				udelay(HD_CMD_DURATION);
 			}
 			break;
 		case LCD_DISPSHIFTRIGHT:
 			for(i = 0; i < val; ++i) {
 				hd44780_4bit_command(lcd, HD_CMD_SHIFT | HD_CMD_SHIFT_DISPLAY | HD_CMD_SHIFT_RIGHT);
-				udelay(HD_CMD_DURATION_CLEAR);
+				udelay(HD_CMD_DURATION);
 			}
 			break;
-		case LCD_PRINT1:
-			/* Put buffer in 1st line of the display */
-			hd44780_4bit_print(lcd, 0, buf);
-			break;
-		case LCD_PRINT2:
-			/* Put buffer in 2nd line of the display */
-			hd44780_4bit_print(lcd, 1, buf);
+		case LCD_PRINT:
+			/* parse line number */
+			line = buf[0] - '0';
+			if(line < 0 || line >= pdata->rows)
+				return -EINVAL;
+			/* Put buffer in appropriate line of the display */
+			hd44780_4bit_print(lcd, line, buf + 1);
 			break;
 		case LCD_PRINTRAW:
 			hd44780_4bit_rawprint(lcd, buf);
@@ -526,41 +500,24 @@ static ssize_t hd44780_print(struct device *dev, struct device_attribute *attr,
 	return count;
 }
 
-#if 0
-/* Define the device attributes */
-#define MCP23017_ENTRY_RO(name, cmd_idx) \
-	static SENSOR_DEVICE_ATTR(name, S_IRUGO, mcp23017_show, NULL, cmd_idx)
+/* write only attributes */
+static SENSOR_DEVICE_ATTR(lcd_clear,          S_IWUSR, NULL, hd44780_store, LCD_CLEAR);
+static SENSOR_DEVICE_ATTR(lcd_home,           S_IWUSR, NULL, hd44780_store, LCD_HOME);
+static SENSOR_DEVICE_ATTR(lcd_increment,      S_IWUSR, NULL, hd44780_store, LCD_ENTRYINCREMENT);
+static SENSOR_DEVICE_ATTR(lcd_shift,          S_IWUSR, NULL, hd44780_store, LCD_ENTRYSHIFT);
+static SENSOR_DEVICE_ATTR(lcd_displayon,      S_IWUSR, NULL, hd44780_store, LCD_CTRLDISP);
+static SENSOR_DEVICE_ATTR(lcd_cursoron,       S_IWUSR, NULL, hd44780_store, LCD_CTRLCURS);
+static SENSOR_DEVICE_ATTR(lcd_cursorblink,    S_IWUSR, NULL, hd44780_store, LCD_CTRLBLINK);
+static SENSOR_DEVICE_ATTR(lcd_cursshiftleft,  S_IWUSR, NULL, hd44780_store, LCD_CURSSHIFTLEFT);
+static SENSOR_DEVICE_ATTR(lcd_cursshiftright, S_IWUSR, NULL, hd44780_store, LCD_CURSSHIFTRIGHT);
+static SENSOR_DEVICE_ATTR(lcd_dispshiftleft,  S_IWUSR, NULL, hd44780_store, LCD_DISPSHIFTLEFT);
+static SENSOR_DEVICE_ATTR(lcd_dispshiftright, S_IWUSR, NULL, hd44780_store, LCD_DISPSHIFTRIGHT);
+static SENSOR_DEVICE_ATTR(lcd_print,          S_IWUSR, NULL, hd44780_store, LCD_PRINT);
+static SENSOR_DEVICE_ATTR(lcd_printraw,       S_IWUSR, NULL, hd44780_store, LCD_PRINTRAW);
 
-#define MCP23017_ENTRY_RW(name, cmd_idx) \
-	static SENSOR_DEVICE_ATTR(name, S_IRUGO | S_IWUSR, mcp23017_show, \
-				  mcp23017_store, cmd_idx)
-
-MCP23017_ENTRY_RO(input0,	((MCP_GPIO << 1)       ));
-MCP23017_ENTRY_RO(input1,	((MCP_GPIO << 1)    + 1));
-MCP23017_ENTRY_RW(output0,	((MCP_OLAT << 1)       ));
-MCP23017_ENTRY_RW(output1,	((MCP_OLAT << 1)    + 1));
-MCP23017_ENTRY_RW(direction0,	((MCP_IODIR << 1)      ));
-MCP23017_ENTRY_RW(direction1,	((MCP_IODIR << 1)   + 1));
-MCP23017_ENTRY_RW(inten0,	((MCP_GPINTEN << 1)    ));
-MCP23017_ENTRY_RW(inten1,	((MCP_GPINTEN << 1) + 1));
-MCP23017_ENTRY_RW(pullup0,	((MCP_GPPU << 1)       ));
-MCP23017_ENTRY_RW(pullup1,	((MCP_GPPU << 1)    + 1));
-#endif
-
-static SENSOR_DEVICE_ATTR(lcd_clear,          S_IWUSR, NULL, hd44780_print, LCD_CLEAR);
-static SENSOR_DEVICE_ATTR(lcd_home,           S_IWUSR, NULL, hd44780_print, LCD_HOME);
-static SENSOR_DEVICE_ATTR(lcd_increment,      S_IWUSR, NULL, hd44780_print, LCD_ENTRYINCREMENT);
-static SENSOR_DEVICE_ATTR(lcd_shift,          S_IWUSR, NULL, hd44780_print, LCD_ENTRYSHIFT);
-static SENSOR_DEVICE_ATTR(lcd_displayon,      S_IWUSR, NULL, hd44780_print, LCD_CTRLDISP);
-static SENSOR_DEVICE_ATTR(lcd_cursoron,       S_IWUSR, NULL, hd44780_print, LCD_CTRLCURS);
-static SENSOR_DEVICE_ATTR(lcd_cursorblink,    S_IWUSR, NULL, hd44780_print, LCD_CTRLBLINK);
-static SENSOR_DEVICE_ATTR(lcd_cursshiftleft,  S_IWUSR, NULL, hd44780_print, LCD_CURSSHIFTLEFT);
-static SENSOR_DEVICE_ATTR(lcd_cursshiftright, S_IWUSR, NULL, hd44780_print, LCD_CURSSHIFTRIGHT);
-static SENSOR_DEVICE_ATTR(lcd_dispshiftleft,  S_IWUSR, NULL, hd44780_print, LCD_DISPSHIFTLEFT);
-static SENSOR_DEVICE_ATTR(lcd_dispshiftright, S_IWUSR, NULL, hd44780_print, LCD_DISPSHIFTRIGHT);
-static SENSOR_DEVICE_ATTR(lcd_print1,         S_IWUSR, NULL, hd44780_print, LCD_PRINT1);
-static SENSOR_DEVICE_ATTR(lcd_print2,         S_IWUSR, NULL, hd44780_print, LCD_PRINT2);
-static SENSOR_DEVICE_ATTR(lcd_printraw,       S_IWUSR, NULL, hd44780_print, LCD_PRINTRAW);
+/* read only attributes */
+static SENSOR_DEVICE_ATTR(lcd_rows,           S_IRUGO, hd44780_show, NULL, LCD_ROWS);
+static SENSOR_DEVICE_ATTR(lcd_cols,           S_IRUGO, hd44780_show, NULL, LCD_COLS);
 
 static struct attribute *hd44780_attributes[] = {
 	&sensor_dev_attr_lcd_clear          .dev_attr.attr,
@@ -574,9 +531,10 @@ static struct attribute *hd44780_attributes[] = {
 	&sensor_dev_attr_lcd_cursshiftright .dev_attr.attr,
 	&sensor_dev_attr_lcd_dispshiftleft  .dev_attr.attr,
 	&sensor_dev_attr_lcd_dispshiftright .dev_attr.attr,
-	&sensor_dev_attr_lcd_print1         .dev_attr.attr,
-	&sensor_dev_attr_lcd_print2         .dev_attr.attr,
+	&sensor_dev_attr_lcd_print          .dev_attr.attr,
 	&sensor_dev_attr_lcd_printraw       .dev_attr.attr,
+	&sensor_dev_attr_lcd_rows           .dev_attr.attr,
+	&sensor_dev_attr_lcd_cols           .dev_attr.attr,
 	NULL,
 };
 
@@ -597,6 +555,20 @@ static int /*__init*/ hd44780_probe(struct platform_device *pdev)
 
 	lcd->dev = &pdev->dev;
 	struct hd44780_platform_data * pdata = lcd->dev->platform_data;
+
+	/* check platform data */
+	if(!pdata) {
+		printk("--- %s platform data is not defined\n", __func__);
+		return -EINVAL;
+	}
+	else if(pdata->rows < 1 || pdata->rows > HD44780_MAX_ROWS) {
+		printk("--- %s platform data rows outside of interval <1,%d>\n", __func__, HD44780_MAX_ROWS);
+		return -EINVAL;
+	}
+	else if(pdata->cols < 1 || pdata->cols > HD44780_MAX_COLS) {
+		printk("--- %s platform data cols outside of interval <1,%d>\n", __func__, HD44780_MAX_COLS);
+		return -EINVAL;
+	}
 
 	mutex_init(&lcd->status_lock);
 
