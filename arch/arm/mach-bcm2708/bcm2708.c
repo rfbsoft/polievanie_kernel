@@ -541,23 +541,45 @@ static struct platform_device bcm2708_spi_device = {
 		.coherent_dma_mask = DMA_BIT_MASK(DMA_MASK_BITS_COMMON)},
 };
 
+#include <linux/spi/mcp23s08.h>
+
+#define MCP23S08_SPICS0_GPIO_BASE		128
+
+/* PiFace attached to Sainsmart 8-relays module */
+struct mcp23s08_platform_data polievanie_mcp23s08_data = {
+		.chip[0] = {
+				.is_present = true,
+				.pullups = 0xffff,
+		},
+		.base = MCP23S08_SPICS0_GPIO_BASE,
+};
+
 #ifdef CONFIG_BCM2708_SPIDEV
 static struct spi_board_info bcm2708_spi_devices[] = {
 #ifdef CONFIG_SPI_SPIDEV
+//	{
+//		.modalias = "spidev",
+//		.max_speed_hz = 500000,
+//		.bus_num = 0,
+//		.chip_select = 0,
+//		.mode = SPI_MODE_0,
+//	},
 	{
-		.modalias = "spidev",
-		.max_speed_hz = 500000,
-		.bus_num = 0,
-		.chip_select = 0,
-		.mode = SPI_MODE_0,
-	}, {
 		.modalias = "spidev",
 		.max_speed_hz = 500000,
 		.bus_num = 0,
 		.chip_select = 1,
 		.mode = SPI_MODE_0,
-	}
+	},
 #endif
+	{
+		.modalias = "mcp23s17",
+		.platform_data = &polievanie_mcp23s08_data,
+		.max_speed_hz = 500000,
+		.bus_num = 0,
+		.chip_select = 0,
+		.mode = SPI_MODE_0,
+	},
 };
 #endif
 
@@ -910,6 +932,10 @@ static struct gpio polievanie_mcp23017_0x20_gpios[] = {
 
 #include <linux/platform_data/hd44780.h>
 static struct hd44780_platform_data polievanie_lcd2x16_data = {
+	.rows = 2,
+	.cols = 16,
+	.row_offset = {0x00, 0x40},
+
 	.gpio_DB7	 = MCP23017_0x20_GPIO_BASE +  9,
 	.gpio_DB6	 = MCP23017_0x20_GPIO_BASE + 10,
 	.gpio_DB5	 = MCP23017_0x20_GPIO_BASE + 11,
@@ -1011,18 +1037,6 @@ static const struct mcp23017_platform_data polievanie_mcp23017_data = {
 
 #define PCF8574_0x3F_GPIO_BASE		96
 
-///* PCF8574 0x3F pin names */
-//static char const *pcf8574_0x3f_names[8] = {
-//	[ 0] = "P0",
-//	[ 1] = "P1",
-//	[ 2] = "P2",
-//	[ 3] = "BACKLIHT4x20",
-//	[ 4] = "P4",
-//	[ 5] = "P5",
-//	[ 6] = "P6",
-//	[ 7] = "P7",
-//};
-
 /* Raspberry polievanie: PCF8574 0x3f output gpios */
 static struct gpio polievanie_pcf8574_0x3f_gpios[] = {
     {
@@ -1033,6 +1047,10 @@ static struct gpio polievanie_pcf8574_0x3f_gpios[] = {
 };
 
 static struct hd44780_platform_data polievanie_lcd4x20_data = {
+	.rows = 4,
+	.cols = 20,
+	.row_offset = {0x00, 0x40, 0x14, 0x54},
+
 	.gpio_DB7	 = PCF8574_0x3F_GPIO_BASE + 7,
 	.gpio_DB6	 = PCF8574_0x3F_GPIO_BASE + 6,
 	.gpio_DB5	 = PCF8574_0x3F_GPIO_BASE + 5,
