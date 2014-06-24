@@ -55,6 +55,7 @@
 #include <mach/system.h>
 
 #include <linux/delay.h>
+#include <linux/gpio.h>
 
 #include "bcm2708.h"
 #include "armctrl.h"
@@ -517,6 +518,7 @@ static struct platform_device bcm2708_alsa_devices[] = {
 	       },
 };
 
+/* -------------------- SPI ------------------------------ */
 static struct resource bcm2708_spi_resources[] = {
 	{
 		.start = SPI0_BASE,
@@ -543,15 +545,150 @@ static struct platform_device bcm2708_spi_device = {
 
 #include <linux/spi/mcp23s08.h>
 
-#define MCP23S08_SPICS0_GPIO_BASE		128
+#define MCP23S17_SPICS0_GPIO_BASE		128
+
+/* MCP23S17 PiFace CS0 pin names */
+static char const *mcp23s17_spics0_names[16] = {
+	[ 0] = "RELAY0",
+	[ 1] = "RELAY1",
+	[ 2] = "RELAY2",
+	[ 3] = "RELAY3",
+	[ 4] = "RELAY4",
+	[ 5] = "RELAY5",
+	[ 6] = "RELAY6",
+	[ 7] = "RELAY7",
+	[ 8] = "INPUT0",
+	[ 9] = "INPUT1",
+	[10] = "INPUT2",
+	[11] = "INPUT3",
+	[12] = "INPUT4",
+	[13] = "INPUT5",
+	[14] = "INPUT6",
+	[15] = "INPUT7",
+};
+
+/* Raspberry polievanie: MCP23S17 SPICS0 PiFace gpios */
+static struct gpio polievanie_mcp23s17_spics0_gpios[] = {
+    {
+        .gpio   = MCP23S17_SPICS0_GPIO_BASE + 0,
+        .flags  = GPIOF_OUT_INIT_LOW,
+        .label  = "RELAY0",
+    },
+    {
+        .gpio   = MCP23S17_SPICS0_GPIO_BASE + 1,
+        .flags  = GPIOF_OUT_INIT_LOW,
+        .label  = "RELAY1",
+    },
+    {
+        .gpio   = MCP23S17_SPICS0_GPIO_BASE + 2,
+        .flags  = GPIOF_OUT_INIT_LOW,
+        .label  = "RELAY2",
+    },
+    {
+        .gpio   = MCP23S17_SPICS0_GPIO_BASE + 3,
+        .flags  = GPIOF_OUT_INIT_LOW,
+        .label  = "RELAY3",
+    },
+    {
+        .gpio   = MCP23S17_SPICS0_GPIO_BASE + 4,
+        .flags  = GPIOF_OUT_INIT_LOW,
+        .label  = "RELAY4",
+    },
+    {
+        .gpio   = MCP23S17_SPICS0_GPIO_BASE + 5,
+        .flags  = GPIOF_OUT_INIT_LOW,
+        .label  = "RELAY5",
+    },
+    {
+        .gpio   = MCP23S17_SPICS0_GPIO_BASE + 6,
+        .flags  = GPIOF_OUT_INIT_LOW,
+        .label  = "RELAY6",
+    },
+    {
+        .gpio   = MCP23S17_SPICS0_GPIO_BASE + 7,
+        .flags  = GPIOF_OUT_INIT_LOW,
+        .label  = "RELAY7",
+    },
+    {
+        .gpio   = MCP23S17_SPICS0_GPIO_BASE + 8,
+        .flags  = GPIOF_IN,
+        .label  = "INPUT0",
+    },
+    {
+        .gpio   = MCP23S17_SPICS0_GPIO_BASE + 9,
+        .flags  = GPIOF_IN,
+        .label  = "INPUT1",
+    },
+    {
+        .gpio   = MCP23S17_SPICS0_GPIO_BASE + 10,
+        .flags  = GPIOF_IN,
+        .label  = "INPUT2",
+    },
+    {
+        .gpio   = MCP23S17_SPICS0_GPIO_BASE + 11,
+        .flags  = GPIOF_IN,
+        .label  = "INPUT3",
+    },
+    {
+        .gpio   = MCP23S17_SPICS0_GPIO_BASE + 12,
+        .flags  = GPIOF_IN,
+        .label  = "INPUT4",
+    },
+    {
+        .gpio   = MCP23S17_SPICS0_GPIO_BASE + 13,
+        .flags  = GPIOF_IN,
+        .label  = "INPUT5",
+    },
+    {
+        .gpio   = MCP23S17_SPICS0_GPIO_BASE + 14,
+        .flags  = GPIOF_IN,
+        .label  = "INPUT6",
+    },
+    {
+        .gpio   = MCP23S17_SPICS0_GPIO_BASE + 15,
+        .flags  = GPIOF_IN,
+        .label  = "INPUT7",
+    },
+};
+
+/* Raspberry polievanie: MCP23S17 SPICS0 PiFace setup/teardown functions */
+static int polievanie_mcp23s17_spics0_setup(struct device *dev, unsigned gpio,
+			unsigned ngpio, void *ctx)
+{
+    int     rc;
+
+    /* request GPIO's */
+    rc = gpio_request_array(ARRAY_AND_SIZE(polievanie_mcp23s17_spics0_gpios));
+    if (rc < 0)
+        return rc;
+
+    /* export the GPIO 's to userspace */
+    gpio_export_array(ARRAY_AND_SIZE(polievanie_mcp23s17_spics0_gpios), false);
+
+    return 0;
+}
+static int polievanie_mcp23s17_spics0_teardown(struct device *dev, unsigned gpio,
+			unsigned ngpio, void *ctx)
+{
+	/* unexport the GPIO 's from userspace */
+	gpio_unexport_array(ARRAY_AND_SIZE(polievanie_mcp23s17_spics0_gpios));
+
+	/* free GPIO's */
+	gpio_free_array(ARRAY_AND_SIZE(polievanie_mcp23s17_spics0_gpios));
+
+	return 0;
+}
 
 /* PiFace attached to Sainsmart 8-relays module */
-struct mcp23s08_platform_data polievanie_mcp23s08_data = {
+struct mcp23s08_platform_data polievanie_mcp23s17_spics0_data = {
 		.chip[0] = {
 				.is_present = true,
 				.pullups = 0xffff,
+				.setup = polievanie_mcp23s17_spics0_setup,
+				.teardown = polievanie_mcp23s17_spics0_teardown,
+				.names = mcp23s17_spics0_names,
 		},
-		.base = MCP23S08_SPICS0_GPIO_BASE,
+		.base = MCP23S17_SPICS0_GPIO_BASE,
 };
 
 #ifdef CONFIG_BCM2708_SPIDEV
@@ -574,7 +711,7 @@ static struct spi_board_info bcm2708_spi_devices[] = {
 #endif
 	{
 		.modalias = "mcp23s17",
-		.platform_data = &polievanie_mcp23s08_data,
+		.platform_data = &polievanie_mcp23s17_spics0_data,
 		.max_speed_hz = 500000,
 		.bus_num = 0,
 		.chip_select = 0,
@@ -920,7 +1057,6 @@ static struct gpio_keys_platform_data polievanie_mcp23017_0x20_button_data = {
 	.nbuttons	=  ARRAY_SIZE(polievanie_mcp23017_0x20_buttons),
 };
 
-#include <linux/gpio.h>
 /* Raspberry polievanie: MCP23017 0x20 output gpios */
 static struct gpio polievanie_mcp23017_0x20_gpios[] = {
     {
