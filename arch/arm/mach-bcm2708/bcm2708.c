@@ -1006,7 +1006,7 @@ static char const *mcp23017_0x20_names[16] = {
 	[ 3] = "BTN_UP",
 	[ 4] = "BTN_LEFT",
 	[ 5] = "A5",
-	[ 6] = "BACKLIGHT",
+	[ 6] = "BACKLIGHT2x16",
 	[ 7] = "A7",
 	[ 8] = "B0",
 	[ 9] = "B1",
@@ -1173,6 +1173,18 @@ static const struct mcp23017_platform_data polievanie_mcp23017_data = {
 
 #define PCF8574_0x3F_GPIO_BASE		96
 
+/* PCF8574 0x3f pin names */
+static char const *pcf8574_0x3f_names[8] = {
+	[ 0] = "LCD_RS",
+	[ 1] = "LCD_RW",
+	[ 2] = "LCD_E",
+	[ 3] = "BACKLIGHT4x20",
+	[ 4] = "LCD_DB4",
+	[ 5] = "LCD_DB5",
+	[ 6] = "LCD_DB6",
+	[ 7] = "LCD_DB7",
+};
+
 /* Raspberry polievanie: PCF8574 0x3f output gpios */
 static struct gpio polievanie_pcf8574_0x3f_gpios[] = {
     {
@@ -1270,6 +1282,7 @@ static const struct pcf857x_platform_data polievanie_pcf857x_data = {
 		.gpio_base	= PCF8574_0x3F_GPIO_BASE,
 		.setup		= polievanie_pcf8574_0x3f_setup,
 		.teardown	= polievanie_pcf8574_0x3f_teardown,
+		.names		= pcf8574_0x3f_names,
 };
 
 static struct i2c_board_info __initdata polievanie_i2c_devices[] = {
