@@ -4,6 +4,16 @@
 struct mcp23s08_chip_info {
 	bool		is_present;	/* true if populated */
 	unsigned	pullups;	/* BIT(x) means enable pullup x */
+
+	/* following is only for MCP23S17 */
+	void		*context;	/* param to setup/teardown */
+	int		(*setup)(struct device *dev,
+				unsigned gpio, unsigned ngpio,
+				void *context);
+	int		(*teardown)(struct device *dev,
+				unsigned gpio, unsigned ngpio,
+				void *context);
+	const char	*const *names;
 };
 
 struct mcp23s08_platform_data {

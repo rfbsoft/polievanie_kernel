@@ -64,6 +64,16 @@ struct mcp23s08 {
 
 	const struct mcp23s08_ops	*ops;
 	void			*data; /* ops specific data */
+
+	/* following is only for MCP23S17 */
+	const char *const 	*names;
+	void		*context;	/* param to setup/teardown */
+	int		(*setup)(struct device *dev,
+				unsigned gpio, unsigned ngpio,
+				void *context);
+	int		(*teardown)(struct device *dev,
+				unsigned gpio, unsigned ngpio,
+				void *context);
 };
 
 /* A given spi_device can represent up to eight mcp23sxx chips
@@ -402,6 +412,7 @@ static int mcp23s08_probe_one(struct mcp23s08 *mcp, struct device *dev,
 		mcp->ops = &mcp23s17_ops;
 		mcp->chip.ngpio = 16;
 		mcp->chip.label = "mcp23s17";
+		mcp->chip.names = mcp->names;
 		break;
 #endif /* CONFIG_SPI_MASTER */
 
@@ -470,9 +481,20 @@ static int mcp23s08_probe_one(struct mcp23s08 *mcp, struct device *dev,
 	}
 
 	status = gpiochip_add(&mcp->chip);
+	if(status < 0)
+		goto fail;
+
+	/* chip specific setup - only for MCP23S17 */
+	if (type == MCP_TYPE_S17 && mcp->setup) {
+		status = mcp->setup(dev, mcp->chip.base,
+				mcp->chip.ngpio, mcp->context);
+		if (status < 0)
+			goto fail;
+	}
+
 fail:
 	if (status < 0)
-		dev_dbg(dev, "can't setup chip %d, --> %d\n",
+		dev_warn(dev, "can't setup chip %d, --> %d\n",
 			addr, status);
 	return status;
 }
@@ -697,6 +719,12 @@ static int mcp23s08_probe(struct spi_device *spi)
 		if (!(spi_present_mask & (1 << addr)))
 			continue;
 		chips--;
+		if(type == MCP_TYPE_S17) {
+			data->chip[chips].names		= pdata->chip[chips].names;
+			data->chip[chips].context	= pdata->chip[chips].context;
+			data->chip[chips].setup		= pdata->chip[chips].setup;
+			data->chip[chips].teardown	= pdata->chip[chips].teardown;
+		}
 		data->mcp[addr] = &data->chip[chips];
 		status = mcp23s08_probe_one(data->mcp[addr], &spi->dev, spi,
 					    0x40 | (addr << 1), type, base,
@@ -736,12 +764,30 @@ static int mcp23s08_remove(struct spi_device *spi)
 	struct mcp23s08_driver_data	*data = spi_get_drvdata(spi);
 	unsigned			addr;
 	int				status = 0;
+	int				type;
+
+	type = spi_get_device_id(spi)->driver_data;
 
 	for (addr = 0; addr < ARRAY_SIZE(data->mcp); addr++) {
 		int tmp;
 
 		if (!data->mcp[addr])
 			continue;
+
+		/* chip specific teardown - only for MCP23S17 */
+		if (type == MCP_TYPE_S17 && data->mcp[addr]->teardown) {
+			tmp = data->mcp[addr]->teardown(&spi->dev,
+					data->mcp[addr]->chip.base,
+					data->mcp[addr]->chip.ngpio,
+					data->mcp[addr]->context);
+			if (tmp < 0) {
+				dev_err(&spi->dev,
+					"%s --> %d\n",
+					"mcp23s08_chip_info.teardown",
+					tmp);
+				status = tmp;
+			}
+		}
 
 		tmp = gpiochip_remove(&data->mcp[addr]->chip);
 		if (tmp < 0) {
