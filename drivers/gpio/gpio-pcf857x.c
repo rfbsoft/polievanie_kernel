@@ -307,6 +307,7 @@ static int pcf857x_probe(struct i2c_client *client,
 	gpio->chip.direction_input	= pcf857x_input;
 	gpio->chip.direction_output	= pcf857x_output;
 	gpio->chip.ngpio		= id->driver_data;
+	gpio->chip.names		= pdata->names;
 
 	/* enable gpio_to_irq() if platform has settings */
 	if (client->irq) {

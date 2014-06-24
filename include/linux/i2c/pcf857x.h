@@ -42,6 +42,7 @@ struct pcf857x_platform_data {
 					int gpio, unsigned ngpio,
 					void *context);
 	void		*context;
+	const char	*const *names;
 };
 
 #endif /* __LINUX_PCF857X_H */
