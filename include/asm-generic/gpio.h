@@ -203,10 +203,13 @@ extern void gpio_free_array(const struct gpio *array, size_t num);
  * but more typically is configured entirely from userspace.
  */
 extern int gpio_export(unsigned gpio, bool direction_may_change);
+extern int gpio_export_array(const struct gpio *array, size_t num,
+			bool direction_may_change);
 extern int gpio_export_link(struct device *dev, const char *name,
 			unsigned gpio);
 extern int gpio_sysfs_set_active_low(unsigned gpio, int value);
 extern void gpio_unexport(unsigned gpio);
+extern void gpio_unexport_array(const struct gpio *array, size_t num);
 
 #endif	/* CONFIG_GPIO_SYSFS */
 
@@ -295,12 +298,23 @@ static inline int gpio_export_link(struct device *dev, const char *name,
 	return -ENOSYS;
 }
 
+static inline int gpio_export_array(const struct gpio *array, size_t num,
+			bool direction_may_change)
+{
+	return -ENOSYS;
+}
+
 static inline int gpio_sysfs_set_active_low(unsigned gpio, int value)
 {
 	return -ENOSYS;
 }
 
 static inline void gpio_unexport(unsigned gpio)
+{
+}
+
+static inline void gpio_unexport_array(const struct gpio *array,
+			size_t num)
 {
 }
 #endif	/* CONFIG_GPIO_SYSFS */

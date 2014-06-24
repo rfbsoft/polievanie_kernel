@@ -734,6 +734,29 @@ static struct class gpio_class = {
 	.class_attrs =	gpio_class_attrs,
 };
 
+/**
+ * gpio_export_array - export multiple GPIOs in a single call
+ * @array:	array of the 'struct gpio'
+ * @num:	how many GPIOs in the array
+ */
+int gpio_export_array(const struct gpio *array, size_t num,
+			bool direction_may_change)
+{
+	int i, err;
+
+	for (i = 0; i < num; i++, array++) {
+		err = gpio_export(array->gpio, direction_may_change);
+		if (err)
+			goto err_export;
+	}
+	return 0;
+
+err_export:
+	while (i--)
+		gpio_unexport((--array)->gpio);
+	return err;
+}
+EXPORT_SYMBOL_GPL(gpio_export_array);
 
 /**
  * gpio_export - export a GPIO through sysfs
@@ -985,6 +1008,18 @@ void gpio_unexport(unsigned gpio)
 	gpiod_unexport(gpio_to_desc(gpio));
 }
 EXPORT_SYMBOL_GPL(gpio_unexport);
+
+/**
+ * gpio_unexport_array - unexport multiple GPIOs in a single call
+ * @array:	array of the 'struct gpio'
+ * @num:	how many GPIOs in the array
+ */
+void gpio_unexport_array(const struct gpio *array, size_t num)
+{
+	while (num--)
+		gpio_unexport((array++)->gpio);
+}
+EXPORT_SYMBOL_GPL(gpio_unexport_array);
 
 static int gpiochip_export(struct gpio_chip *chip)
 {

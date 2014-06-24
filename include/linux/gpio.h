@@ -184,6 +184,14 @@ static inline int gpio_export_link(struct device *dev, const char *name,
 	return -EINVAL;
 }
 
+static inline int gpio_export_array(const struct gpio *array, size_t num,
+			bool direction_may_change)
+{
+	/* GPIO can never have been requested or set as {in,out}put */
+	WARN_ON(1);
+	return -EINVAL;
+}
+
 static inline int gpio_sysfs_set_active_low(unsigned gpio, int value)
 {
 	/* GPIO can never have been requested */
@@ -194,6 +202,13 @@ static inline int gpio_sysfs_set_active_low(unsigned gpio, int value)
 static inline void gpio_unexport(unsigned gpio)
 {
 	/* GPIO can never have been exported */
+	WARN_ON(1);
+}
+
+static inline void gpio_unexport_array(const struct gpio *array,
+			size_t num)
+{
+	/* GPIO array can never have been exported */
 	WARN_ON(1);
 }
 
