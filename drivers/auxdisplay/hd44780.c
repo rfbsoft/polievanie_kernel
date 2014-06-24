@@ -99,6 +99,7 @@
 #define LCD_PRINTRAW		12
 #define LCD_ROWS			13
 #define LCD_COLS			14
+#define LCD_ROWOFFSETS		15
 
 /**
  * @dev: a pointer back to containing device
@@ -316,6 +317,8 @@ static ssize_t hd44780_show(struct device *dev, struct device_attribute *attr,
 	struct hd44780 *lcd = platform_get_drvdata(pdev);
 	struct hd44780_platform_data * pdata = lcd->dev->platform_data;
 	struct sensor_device_attribute * psa = to_sensor_dev_attr(attr);
+	int i;
+	char hex_num[5];
 
 	switch(psa->index) {
 		case LCD_ROWS:
@@ -323,6 +326,17 @@ static ssize_t hd44780_show(struct device *dev, struct device_attribute *attr,
 			break;
 		case LCD_COLS:
 			return sprintf(buf, "%d\n", pdata->cols);
+			break;
+		case LCD_ROWOFFSETS:
+			buf[0] = '\0';
+			for(i = 0; i < pdata->rows; ++i) {
+				sprintf(hex_num, "0x%02X", pdata->row_offset[i]);
+				if(i > 0)
+					strcat(buf, " ");
+				strcat(buf, hex_num);
+			}
+			strcat(buf, "\n");
+			return strlen(buf);
 			break;
 		default:
 			return -EINVAL;
@@ -518,6 +532,7 @@ static SENSOR_DEVICE_ATTR(lcd_printraw,       S_IWUSR, NULL, hd44780_store, LCD_
 /* read only attributes */
 static SENSOR_DEVICE_ATTR(lcd_rows,           S_IRUGO, hd44780_show, NULL, LCD_ROWS);
 static SENSOR_DEVICE_ATTR(lcd_cols,           S_IRUGO, hd44780_show, NULL, LCD_COLS);
+static SENSOR_DEVICE_ATTR(lcd_rowoffsets,     S_IRUGO, hd44780_show, NULL, LCD_ROWOFFSETS);
 
 static struct attribute *hd44780_attributes[] = {
 	&sensor_dev_attr_lcd_clear          .dev_attr.attr,
@@ -535,6 +550,7 @@ static struct attribute *hd44780_attributes[] = {
 	&sensor_dev_attr_lcd_printraw       .dev_attr.attr,
 	&sensor_dev_attr_lcd_rows           .dev_attr.attr,
 	&sensor_dev_attr_lcd_cols           .dev_attr.attr,
+	&sensor_dev_attr_lcd_rowoffsets     .dev_attr.attr,
 	NULL,
 };
 
