@@ -1060,31 +1060,6 @@ static struct gpio_keys_platform_data polievanie_mcp23017_0x20_button_data = {
 /* Raspberry polievanie: MCP23017 0x20 output gpios */
 static struct gpio polievanie_mcp23017_0x20_gpios[] = {
     {
-        .gpio   = MCP23017_0x20_GPIO_BASE + 0,
-        .flags  = GPIOF_IN,
-        .label  = "LCD2x16_BTN_SELECT",
-    },
-    {
-        .gpio   = MCP23017_0x20_GPIO_BASE + 1,
-        .flags  = GPIOF_IN,
-        .label  = "LCD2x16_BTN_RIGHT",
-    },
-    {
-        .gpio   = MCP23017_0x20_GPIO_BASE + 2,
-        .flags  = GPIOF_IN,
-        .label  = "LCD2x16_BTN_DOWN",
-    },
-    {
-        .gpio   = MCP23017_0x20_GPIO_BASE + 3,
-        .flags  = GPIOF_IN,
-        .label  = "LCD2x16_BTN_UP",
-    },
-    {
-        .gpio   = MCP23017_0x20_GPIO_BASE + 4,
-        .flags  = GPIOF_IN,
-        .label  = "LCD2x16_BTN_LEFT",
-    },
-    {
         .gpio   = MCP23017_0x20_GPIO_BASE + 6,
         .flags  = GPIOF_OUT_INIT_LOW,
         .label  = "LCD2x16_BACKLIGHT",
@@ -1156,11 +1131,6 @@ static int polievanie_mcp23017_0x20_setup(struct i2c_client *client, unsigned gp
     }
 
     /* set active_low on GPIOS */
-    gpio_sysfs_set_active_low(MCP23017_0x20_GPIO_BASE + 0, 1);
-    gpio_sysfs_set_active_low(MCP23017_0x20_GPIO_BASE + 1, 1);
-    gpio_sysfs_set_active_low(MCP23017_0x20_GPIO_BASE + 2, 1);
-    gpio_sysfs_set_active_low(MCP23017_0x20_GPIO_BASE + 3, 1);
-    gpio_sysfs_set_active_low(MCP23017_0x20_GPIO_BASE + 4, 1);
     gpio_sysfs_set_active_low(MCP23017_0x20_GPIO_BASE + 6, 1);
 
     /* export the GPIO 's to userspace */
