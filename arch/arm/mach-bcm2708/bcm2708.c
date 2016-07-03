@@ -1000,22 +1000,22 @@ static struct ads1015_platform_data	polievanie_ads1015_data = {
 
 /* MCP23017 0x20 pin names */
 static char const *mcp23017_0x20_names[16] = {
-	[ 0] = "BTN_SELECT",
-	[ 1] = "BTN_RIGHT",
-	[ 2] = "BTN_DOWN",
-	[ 3] = "BTN_UP",
-	[ 4] = "BTN_LEFT",
-	[ 5] = "A5",
-	[ 6] = "BACKLIGHT2x16",
-	[ 7] = "A7",
-	[ 8] = "B0",
-	[ 9] = "B1",
-	[10] = "B2",
-	[11] = "B3",
-	[12] = "B4",
-	[13] = "B5",
-	[14] = "B6",
-	[15] = "B7",
+	[ 0] = "LCD2x16_BTN_SELECT",
+	[ 1] = "LCD2x16_BTN_RIGHT",
+	[ 2] = "LCD2x16_BTN_DOWN",
+	[ 3] = "LCD2x16_BTN_UP",
+	[ 4] = "LCD2x16_BTN_LEFT",
+	[ 5] = "LCD2x16_A5",
+	[ 6] = "LCD2x16_BACKLIGHT",
+	[ 7] = "LCD2x16_A7",
+	[ 8] = "LCD2x16_B0",
+	[ 9] = "LCD2x16_B1",
+	[10] = "LCD2x16_B2",
+	[11] = "LCD2x16_B3",
+	[12] = "LCD2x16_B4",
+	[13] = "LCD2x16_B5",
+	[14] = "LCD2x16_B6",
+	[15] = "LCD2x16_B7",
 };
 
 /* Raspberry polievanie: MCP23017 0x20 input buttons */
@@ -1060,9 +1060,34 @@ static struct gpio_keys_platform_data polievanie_mcp23017_0x20_button_data = {
 /* Raspberry polievanie: MCP23017 0x20 output gpios */
 static struct gpio polievanie_mcp23017_0x20_gpios[] = {
     {
+        .gpio   = MCP23017_0x20_GPIO_BASE + 0,
+        .flags  = GPIOF_IN,
+        .label  = "LCD2x16_BTN_SELECT",
+    },
+    {
+        .gpio   = MCP23017_0x20_GPIO_BASE + 1,
+        .flags  = GPIOF_IN,
+        .label  = "LCD2x16_BTN_RIGHT",
+    },
+    {
+        .gpio   = MCP23017_0x20_GPIO_BASE + 2,
+        .flags  = GPIOF_IN,
+        .label  = "LCD2x16_BTN_DOWN",
+    },
+    {
+        .gpio   = MCP23017_0x20_GPIO_BASE + 3,
+        .flags  = GPIOF_IN,
+        .label  = "LCD2x16_BTN_UP",
+    },
+    {
+        .gpio   = MCP23017_0x20_GPIO_BASE + 4,
+        .flags  = GPIOF_IN,
+        .label  = "LCD2x16_BTN_LEFT",
+    },
+    {
         .gpio   = MCP23017_0x20_GPIO_BASE + 6,
         .flags  = GPIOF_OUT_INIT_LOW,
-        .label  = "BACKLIGHT2x16",
+        .label  = "LCD2x16_BACKLIGHT",
     },
 };
 
@@ -1131,10 +1156,15 @@ static int polievanie_mcp23017_0x20_setup(struct i2c_client *client, unsigned gp
     }
 
     /* set active_low on GPIOS */
+    gpio_sysfs_set_active_low(MCP23017_0x20_GPIO_BASE + 0, 1);
+    gpio_sysfs_set_active_low(MCP23017_0x20_GPIO_BASE + 1, 1);
+    gpio_sysfs_set_active_low(MCP23017_0x20_GPIO_BASE + 2, 1);
+    gpio_sysfs_set_active_low(MCP23017_0x20_GPIO_BASE + 3, 1);
+    gpio_sysfs_set_active_low(MCP23017_0x20_GPIO_BASE + 4, 1);
     gpio_sysfs_set_active_low(MCP23017_0x20_GPIO_BASE + 6, 1);
 
     /* export the GPIO 's to userspace */
-    gpio_export(MCP23017_0x20_GPIO_BASE + 6, false);
+    gpio_export_array(ARRAY_AND_SIZE(polievanie_mcp23017_0x20_gpios), false);
 
     return 0;
 }
@@ -1150,7 +1180,7 @@ static int polievanie_mcp23017_0x20_teardown(struct i2c_client *client, unsigned
     }
 
     /* unexport the GPIO 's from userspace */
-    gpio_unexport(MCP23017_0x20_GPIO_BASE + 6);
+	gpio_unexport_array(ARRAY_AND_SIZE(polievanie_mcp23017_0x20_gpios));
 
     /* free GPIO's */
     gpio_free_array(ARRAY_AND_SIZE(polievanie_mcp23017_0x20_gpios));
