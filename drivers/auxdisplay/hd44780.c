@@ -394,7 +394,7 @@ static ssize_t hd44780_store(struct device *dev, struct device_attribute *attr,
 		case LCD_CURSSHIFTRIGHT:
 		case LCD_DISPSHIFTLEFT:
 		case LCD_DISPSHIFTRIGHT:
-			if(val < 1 || val > 39)
+			if(val > HD44780_MAX_COLS)
 				return -EINVAL;
 			break;
 	}
