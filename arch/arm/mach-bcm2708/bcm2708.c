@@ -1070,7 +1070,7 @@ static struct gpio polievanie_mcp23017_0x20_gpios[] = {
 static struct hd44780_platform_data polievanie_lcd2x16_data = {
 	.rows = 2,
 	.cols = 16,
-	.row_offset = {0x00, 0x40},
+	.row_offset = {0x00, 0x28},
 
 	.gpio_DB7	 = MCP23017_0x20_GPIO_BASE +  9,
 	.gpio_DB6	 = MCP23017_0x20_GPIO_BASE + 10,
