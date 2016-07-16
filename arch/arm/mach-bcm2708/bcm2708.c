@@ -1197,7 +1197,7 @@ static struct gpio polievanie_pcf8574_0x3f_gpios[] = {
 static struct hd44780_platform_data polievanie_lcd4x20_data = {
 	.rows = 4,
 	.cols = 20,
-	.row_offset = {0x00, 0x40, 0x14, 0x54},
+	.row_offset = {0x00, 0x28, 0x14, 0x3c},
 
 	.gpio_DB7	 = PCF8574_0x3F_GPIO_BASE + 7,
 	.gpio_DB6	 = PCF8574_0x3F_GPIO_BASE + 6,
